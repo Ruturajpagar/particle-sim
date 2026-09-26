@@ -137,6 +137,18 @@ def build(cfg: dict, seed: int, out_dir: str) -> tuple[Simulation, list[str]]:
     return sim, [r["type"] for r in cfg["rules"]]
 
 
+def settle_free_change(rows: list[dict], n: int) -> float:
+    """Change in free fraction over the second half of the last bath stage.
+
+    Near zero = settled. Clearly negative = particles were still binding when
+    the bath was switched off, so the run's outcome had not converged."""
+    bath = [r for r in rows if r["segment"] != "isolated"]
+    last = [r for r in bath if r["segment"] == bath[-1]["segment"]] if bath else []
+    if len(last) < 3:
+        return float("nan")
+    return (last[-1]["free"] - last[len(last) // 2]["free"]) / n
+
+
 def measure(sim: Simulation) -> dict:
     """Outcome metrics for one finished run."""
     s = sim.state
@@ -166,6 +178,7 @@ def measure(sim: Simulation) -> dict:
         "size_entropy": rep.size_entropy / np.log(n),
         "iso_energy_drift": drift,
         "iso_bond_persistence": float(np.mean(persistence)) if persistence else float("nan"),
+        "settle_free_change": settle_free_change(rows, n),
         "anom_singularity": anomalies.get("singularity", 0),
         "anom_numerical": anomalies.get("numerical", 0),
     }
@@ -188,7 +201,7 @@ RESERVED = {"run_id", "seed", "wall_s", "n"}
 METRICS = ["free_frac", "atom_frac", "chain_frac", "clusters", "largest",
            "neutral_clusters", "bind_per_particle", "T_measured", "spatial_entropy",
            "size_entropy", "iso_energy_drift", "iso_bond_persistence",
-           "anom_singularity", "anom_numerical"]
+           "settle_free_change", "anom_singularity", "anom_numerical"]
 
 
 def summarise(results: list[dict], param_names: list[str]) -> list[dict]:
