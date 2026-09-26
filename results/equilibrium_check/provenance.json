@@ -1,0 +1,96 @@
+{
+  "config_file": "experiments/equilibrium_check.toml",
+  "config": {
+    "name": "equilibrium_check",
+    "description": "Free vs pre-paired starts, long hold: does the low-density corner settle, and to what?",
+    "seeds": 3,
+    "base_seed": 300,
+    "system": {
+      "dim": 2,
+      "box": 50.0,
+      "dt": 0.0025,
+      "log_every": 500,
+      "r_bond": 2.0,
+      "boundary": "reflecting",
+      "init": "random",
+      "pair_distance": 1.0
+    },
+    "species": [
+      {
+        "name": "p",
+        "mass": 10.0,
+        "charge": 1.0,
+        "count": 100
+      },
+      {
+        "name": "e",
+        "mass": 1.0,
+        "charge": -1.0,
+        "count": 100
+      }
+    ],
+    "rules": [
+      {
+        "type": "Coulomb",
+        "k": 1.0
+      },
+      {
+        "type": "CoreRepulsion",
+        "c": 0.125,
+        "n": 8
+      }
+    ],
+    "protocol": [
+      {
+        "name": "hold",
+        "steps": 60000,
+        "gamma": 0.5,
+        "t_start": 0.1,
+        "t_end": 0.1
+      },
+      {
+        "name": "isolated",
+        "steps": 4000,
+        "gamma": 0.0
+      }
+    ],
+    "sweep": [
+      {
+        "name": "T_final",
+        "paths": [
+          "protocol.0.t_start",
+          "protocol.0.t_end"
+        ],
+        "values": [
+          0.1,
+          0.2
+        ]
+      },
+      {
+        "name": "box",
+        "paths": [
+          "system.box"
+        ],
+        "values": [
+          50.0,
+          80.0
+        ]
+      },
+      {
+        "name": "init",
+        "paths": [
+          "system.init"
+        ],
+        "values": [
+          "random",
+          "pairs"
+        ]
+      }
+    ]
+  },
+  "git_commit": "06054b87cf77ee690cda6fe3f650aab039b89687",
+  "step_factor": 1.0,
+  "workers": 4,
+  "runs": 24,
+  "wall_s": 1369.3
+}

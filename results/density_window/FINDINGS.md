@@ -71,3 +71,11 @@ from a start where every particle is already paired into an atom, with a
 much longer hold. If both starts converge to the same atom fraction, that
 fraction is the equilibrium answer. This needs one small runner addition:
 an option to start from pre-formed pairs.
+
+## Update (equilibrium_check)
+
+The unsettled corner was re-run from both a free and a fully paired start
+with a 10× longer hold (`results/equilibrium_check/FINDINGS.md`). At
+ρ = 0.031 and T = 0.1 the settled atom fraction is 0.53–0.59, not 0.37:
+atoms are the majority there. At ρ = 0.031, T = 0.2 it is 0.38–0.39
+(not 0.30), and at ρ = 0.08, T = 0.1 it is 0.30–0.34, as measured here.
