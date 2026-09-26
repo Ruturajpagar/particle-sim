@@ -29,7 +29,9 @@ class DirectForceField:
         self.r_min = r_min
 
     def compute(self, state: State) -> ForceResult:
-        dx = state.pos[:, None, :] - state.pos[None, :, :]   # x_i - x_j
+        if not self.interactions:  # free particles: skip the O(N^2) pair work
+            return ForceResult(np.zeros_like(state.pos), np.zeros((state.n, state.n)), 0.0, 0)
+        dx =state.pos[:, None, :] - state.pos[None, :, :]   # x_i - x_j
         r = np.sqrt((dx**2).sum(-1))
         np.fill_diagonal(r, np.inf)
         clamped = int(np.count_nonzero(r < self.r_min) // 2)

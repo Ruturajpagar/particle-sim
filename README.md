@@ -14,6 +14,26 @@ python run_phase1.py --no-core        # remove the short-range core -> classical
 Each run writes to `runs/<name>/`: `log.csv` (time series), `anomalies.jsonl`,
 `final_state.npz`, and a `report.png` dashboard.
 
+## Tests
+
+```
+pip install -e ".[dev]"
+pytest -q
+```
+
+The suite checks the simulator against things that must be true before any
+"discovery" can be trusted:
+
+| Test | What it guarantees |
+|---|---|
+| `test_forces.py` | every force law is the exact negative gradient of its potential (2D and 3D); Newton's third law; Coulomb signs; the core puts the +/− minimum at r = 1; close approaches are counted, not hidden |
+| `test_dynamics.py` | a +/− pair follows the exact Kepler ellipse and returns after one analytic period; energy error scales as dt²; many-body runs in open space conserve momentum and angular momentum; the heat bath reaches its target temperature for every species; walls conserve speed; same seed gives the same trajectory |
+| `test_diagnostics.py` | bound-pair and cluster detection on hand-built scenes; entropy separates gas from condensate; anomaly flags fire correctly; clean isolated runs raise none; replay export round-trips |
+
+When you add a new `PairInteraction`, add it to `RULESETS` in
+`tests/test_forces.py` and the gradient and third-law tests cover it
+automatically.
+
 ## Replay viewer
 
 `viewer/` is a browser replay of recorded runs: particles, bound pairs,

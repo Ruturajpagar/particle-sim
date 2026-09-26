@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .boundaries import ReflectingBox
+from .boundaries import OpenSpace, ReflectingBox
 from .forces import DirectForceField, ForceResult
 from .state import State
 
@@ -25,7 +25,7 @@ class LangevinBAOAB:
         self.dt, self.gamma, self.temperature = dt, gamma, temperature
         self.rng = rng or np.random.default_rng()
 
-    def step(self, state: State, field: DirectForceField, box: ReflectingBox,
+    def step(self, state: State, field: DirectForceField, box: ReflectingBox | OpenSpace,
              prev: ForceResult) -> ForceResult:
         dt, inv_m = self.dt, 1.0 / state.mass[:, None]
 
