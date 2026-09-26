@@ -14,6 +14,34 @@ python run_phase1.py --no-core        # remove the short-range core -> classical
 Each run writes to `runs/<name>/`: `log.csv` (time series), `anomalies.jsonl`,
 `final_state.npz`, and a `report.png` dashboard.
 
+## Experiments
+
+An experiment is a TOML file in `experiments/`: species, rules, protocol,
+the parameters to sweep, and how many seeds. Every run is determined by
+(config, parameter values, seed), and every parameter point uses the same
+seeds so comparisons are not masked by different starting states.
+
+```
+python -m emergent.experiment experiments/atom_window.toml --dry-run        # list runs
+python -m emergent.experiment experiments/atom_window.toml --step-factor 0.05  # quick check
+python -m emergent.experiment experiments/atom_window.toml --workers 4
+python plot_experiment.py results/atom_window
+```
+
+Outputs in `results/<name>/`: `results.csv` (one row per run),
+`summary.csv` (mean / std / s.e.m. per parameter point), `provenance.json`
+(resolved config, git commit, timing), `summary.png`, and per-run logs in
+`runs/` (not committed; reproducible from the config).
+
+A sweep parameter can drive several config paths at once:
+
+```toml
+[[sweep]]
+name = "T_final"
+paths = ["protocol.0.t_end", "protocol.1.t_start", "protocol.1.t_end"]
+values = [0.05, 0.1, 0.2]
+```
+
 ## Tests
 
 ```
