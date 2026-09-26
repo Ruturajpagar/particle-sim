@@ -1,5 +1,7 @@
 __pycache__/
 *.pyc
 .venv/
+*.egg-info/
+.pytest_cache/
 # run outputs are reproducible from the scripts; only curated results are committed
 runs/
