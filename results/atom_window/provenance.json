@@ -1,0 +1,96 @@
+{
+  "config_file": "experiments/atom_window.toml",
+  "config": {
+    "name": "atom_window",
+    "description": "Temperature x core-strength sweep: plasma, atomic gas or ionic solid?",
+    "seeds": 4,
+    "base_seed": 100,
+    "system": {
+      "dim": 2,
+      "box": 30.0,
+      "dt": 0.0025,
+      "log_every": 200,
+      "r_bond": 2.0,
+      "boundary": "reflecting"
+    },
+    "species": [
+      {
+        "name": "p",
+        "mass": 10.0,
+        "charge": 1.0,
+        "count": 100
+      },
+      {
+        "name": "e",
+        "mass": 1.0,
+        "charge": -1.0,
+        "count": 100
+      }
+    ],
+    "rules": [
+      {
+        "type": "Coulomb",
+        "k": 1.0
+      },
+      {
+        "type": "CoreRepulsion",
+        "c": 0.125,
+        "n": 8
+      }
+    ],
+    "protocol": [
+      {
+        "name": "anneal",
+        "steps": 14000,
+        "gamma": 0.5,
+        "t_start": 2.0,
+        "t_end": 0.1
+      },
+      {
+        "name": "hold",
+        "steps": 6000,
+        "gamma": 0.5,
+        "t_start": 0.1,
+        "t_end": 0.1
+      },
+      {
+        "name": "isolated",
+        "steps": 4000,
+        "gamma": 0.0
+      }
+    ],
+    "sweep": [
+      {
+        "name": "T_final",
+        "paths": [
+          "protocol.0.t_end",
+          "protocol.1.t_start",
+          "protocol.1.t_end"
+        ],
+        "values": [
+          0.05,
+          0.1,
+          0.15,
+          0.2,
+          0.3
+        ]
+      },
+      {
+        "name": "core_c",
+        "paths": [
+          "rules.1.c"
+        ],
+        "values": [
+          0.03,
+          0.125,
+          0.5
+        ]
+      }
+    ]
+  },
+  "git_commit": "0120cf526852ccd3636b812f00db2aea68285e54",
+  "step_factor": 1.0,
+  "workers": 4,
+  "runs": 60,
+  "wall_s": 1292.6
+}
