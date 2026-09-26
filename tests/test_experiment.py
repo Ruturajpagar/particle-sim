@@ -123,3 +123,23 @@ def test_shipped_experiment_configs_are_valid(tmp_path):
         specs = ex.expand(ex.load_config(p))
         assert specs
         ex.build(specs[0].config, specs[0].seed, str(tmp_path))  # constructs without error
+
+
+def test_settle_metric_reads_the_last_bath_stage():
+    rows = ([{"segment": "anneal", "free": 100}] * 4
+            + [{"segment": "hold", "free": f} for f in (80, 70, 60, 50, 40)]
+            + [{"segment": "isolated", "free": 10}])
+    # second half of the hold only: 60 -> 40 of 200; anneal and isolated ignored
+    assert ex.settle_free_change(rows, 200) == pytest.approx(-0.1)
+    flat = [{"segment": "hold", "free": 50}] * 6
+    assert ex.settle_free_change(flat, 200) == 0.0
+    assert ex.settle_free_change(flat[:2], 200) != ex.settle_free_change(flat[:2], 200)  # nan
+
+
+def test_settle_metric_is_reported(tmp_path):
+    cfg = copy.deepcopy(TINY)
+    cfg["sweep"] = []
+    cfg["seeds"] = 1
+    (spec,) = ex.expand(cfg)
+    row = ex.run_one((spec, str(tmp_path)))
+    assert "settle_free_change" in row and -1.0 <= row["settle_free_change"] <= 1.0
