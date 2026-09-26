@@ -1,0 +1,76 @@
+# Is there a temperature window where isolated "atoms" are the stable outcome?
+#
+# Hypothesis (stated before running): an isolated p+e pair sits in a deep
+# well (depth ~ 0.875 at c = 0.125), while two pairs attract each other only
+# through a much weaker dipole-dipole force. So there should be three regimes:
+#   hot          -> mostly free particles (plasma)
+#   intermediate -> pairs bind but pairs do not stick together (atomic gas)
+#   cold         -> pairs aggregate into chains/networks (ionic solid)
+# Changing the core strength c moves the well minimum r0 = (8c)^(1/7) and all
+# binding energies scale like 1/r0, so the window should shift with c.
+#
+# Protocol: cool from T=2 to T_final, hold at T_final so the system can
+# settle, then switch the bath off and check the structures survive alone.
+
+name = "atom_window"
+description = "Temperature x core-strength sweep: plasma, atomic gas or ionic solid?"
+seeds = 4
+base_seed = 100
+
+[system]
+dim = 2
+box = 30.0
+dt = 0.0025
+log_every = 200
+r_bond = 2.0
+boundary = "reflecting"
+
+[[species]]
+name = "p"
+mass = 10.0
+charge = 1.0
+count = 100
+
+[[species]]
+name = "e"
+mass = 1.0
+charge = -1.0
+count = 100
+
+[[rules]]
+type = "Coulomb"
+k = 1.0
+
+[[rules]]
+type = "CoreRepulsion"
+c = 0.125
+n = 8
+
+[[protocol]]
+name = "anneal"
+steps = 14000
+gamma = 0.5
+t_start = 2.0
+t_end = 0.1
+
+[[protocol]]
+name = "hold"
+steps = 6000
+gamma = 0.5
+t_start = 0.1
+t_end = 0.1
+
+[[protocol]]
+name = "isolated"
+steps = 4000
+gamma = 0.0
+
+[[sweep]]
+name = "T_final"
+paths = ["protocol.0.t_end", "protocol.1.t_start", "protocol.1.t_end"]
+values = [0.05, 0.1, 0.15, 0.2, 0.3]
+
+[[sweep]]
+name = "core_c"
+paths = ["rules.1.c"]
+values = [0.03, 0.125, 0.5]
