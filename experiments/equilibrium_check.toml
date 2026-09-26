@@ -1,0 +1,83 @@
+# Two-sided equilibrium check for the corner density_window left open.
+#
+# density_window found low-density, low-temperature points still binding
+# when the bath switched off (results/density_window/FINDINGS.md), so their
+# atom fractions were only lower bounds.
+#
+# Method: run each point from two opposite starts and hold at the target
+# temperature for a long time (150 time units, ~10x the earlier hold):
+#   init = "random" -> every particle free, scattered uniformly
+#   init = "pairs"  -> every particle already bound into a p+e atom
+# If both starts end at the same atom / chain / free fractions, that shared
+# value is the equilibrium answer. If they stay apart, the system is too slow
+# (or glassy) at that point to settle on this timescale, and we say so.
+#
+# Question it answers: at low density and low temperature, do atoms become
+# the majority once the system has settled?
+#
+# No anneal stage: heating the paired start to T = 2 would break the atoms
+# and erase the difference between the two starts. dt = 0.0025 is enough at
+# these temperatures (atom_window drift <= 3e-5 at T <= 0.2).
+
+name = "equilibrium_check"
+description = "Free vs pre-paired starts, long hold: does the low-density corner settle, and to what?"
+seeds = 3
+base_seed = 300
+
+[system]
+dim = 2
+box = 50.0
+dt = 0.0025
+log_every = 500
+r_bond = 2.0
+boundary = "reflecting"
+init = "random"
+pair_distance = 1.0
+
+[[species]]
+name = "p"
+mass = 10.0
+charge = 1.0
+count = 100
+
+[[species]]
+name = "e"
+mass = 1.0
+charge = -1.0
+count = 100
+
+[[rules]]
+type = "Coulomb"
+k = 1.0
+
+[[rules]]
+type = "CoreRepulsion"
+c = 0.125
+n = 8
+
+[[protocol]]
+name = "hold"
+steps = 60000
+gamma = 0.5
+t_start = 0.1
+t_end = 0.1
+
+[[protocol]]
+name = "isolated"
+steps = 4000
+gamma = 0.0
+
+[[sweep]]
+name = "T_final"
+paths = ["protocol.0.t_start", "protocol.0.t_end"]
+values = [0.1, 0.2]
+
+[[sweep]]
+name = "box"
+paths = ["system.box"]
+values = [50.0, 80.0]
+
+[[sweep]]
+name = "init"
+paths = ["system.init"]
+values = ["random", "pairs"]

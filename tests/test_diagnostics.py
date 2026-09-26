@@ -106,3 +106,26 @@ def test_replay_export_round_trips(tmp_path, rng):
     assert np.abs(last - sim.frames[-1][0]).max() < 10.0 / 65535
     assert d["frames"]["bond_offsets"][-1] == sum(len(f[1]) for f in sim.frames)
     assert len(d["series"]["time"]) == nf
+
+
+def test_paired_start_is_all_atoms(rng):
+    from emergent import paired_state
+    state = paired_state(SPECIES, [20, 20], dim=2, box=40.0, temperature=0.2, rng=rng)
+    n = 20
+    # each + particle has its partner exactly one unit away
+    assert np.allclose(np.linalg.norm(state.pos[:n] - state.pos[n:], axis=1), 1.0)
+    assert np.allclose((state.mass[:, None] * state.vel).sum(0), 0.0, atol=1e-12)
+    assert np.all((state.pos > 0) & (state.pos < 40.0))
+    fr = FIELD.compute(state)
+    rep = dg.analyse_clusters(state, fr, dg.bound_pairs(state, fr, r_bond=2.0))
+    assert rep.compositions == {"1e+1p": 20} and rep.free_particles == 0
+
+
+def test_paired_start_rejects_unpairable_species(rng):
+    import pytest
+    from emergent import Species, paired_state
+    with pytest.raises(ValueError, match="equal counts"):
+        paired_state(SPECIES, [3, 4], 2, 20.0, 0.2, rng)
+    like = [Species("a", 1.0, 1.0), Species("b", 1.0, 1.0)]
+    with pytest.raises(ValueError, match="oppositely charged"):
+        paired_state(like, [3, 3], 2, 20.0, 0.2, rng)

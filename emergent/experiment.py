@@ -38,7 +38,7 @@ from .forces import DirectForceField
 from .integrators import LangevinBAOAB
 from .interactions import Coulomb, CoreRepulsion, PairInteraction, Yukawa
 from .sim import Segment, Simulation
-from .state import Species, random_state
+from .state import Species, paired_state, random_state
 
 RULES: dict[str, type[PairInteraction]] = {
     "Coulomb": Coulomb, "CoreRepulsion": CoreRepulsion, "Yukawa": Yukawa,
@@ -126,8 +126,15 @@ def build(cfg: dict, seed: int, out_dir: str) -> tuple[Simulation, list[str]]:
         rules.append(RULES[r["type"]](**params))
     box_size = sysc["box"]
     box = OpenSpace() if sysc.get("boundary") == "open" else ReflectingBox(box_size)
-    state = random_state(species, counts, sysc["dim"], box_size,
-                         temperature=cfg["protocol"][0].get("t_start", 1.0), rng=rng)
+    t0 = cfg["protocol"][0].get("t_start", 1.0)
+    init = sysc.get("init", "random")
+    if init == "random":
+        state = random_state(species, counts, sysc["dim"], box_size, temperature=t0, rng=rng)
+    elif init == "pairs":
+        state = paired_state(species, counts, sysc["dim"], box_size, temperature=t0, rng=rng,
+                             pair_distance=sysc.get("pair_distance", 1.0))
+    else:
+        raise ValueError(f"unknown init '{init}' (known: random, pairs)")
     os.makedirs(out_dir, exist_ok=True)
     sim = Simulation(state, DirectForceField(rules), box,
                      LangevinBAOAB(dt=sysc["dt"], rng=rng),
