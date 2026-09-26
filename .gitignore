@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.venv/
+# run outputs are reproducible from the scripts; only curated results are committed
+runs/

@@ -1,0 +1,496 @@
+<title>Emergent Clustering Replay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #f3f5f8;
+    --surface: #ffffff;
+    --stage: #fbfcfd;
+    --ink: #18202c;
+    --muted: #5d6879;
+    --faint: #8e98a8;
+    --rule: #dde2ea;
+    --grid: #e9edf2;
+    --pos: #cf3b35;
+    --neg: #2a66d9;
+    --bond: #9aa4b3;
+    --accent: #3a47b8;
+    --warn: #b7791f;
+    --crit: #c2362f;
+    --c1: #cf3b35; --c2: #2a66d9; --c3: #1f8a5b; --c4: #8a4fc4;
+    --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0e1218; --surface: #151a22; --stage: #0b0e13; --ink: #e5e9f0;
+      --muted: #9aa4b4; --faint: #6c7686; --rule: #262d38; --grid: #1c222b;
+      --pos: #ff6a5f; --neg: #5f9dff; --bond: #56606f; --accent: #8f9bff;
+      --warn: #e0a54a; --crit: #ff6a5f;
+      --c1: #ff6a5f; --c2: #5f9dff; --c3: #4cc38a; --c4: #b98af0;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0e1218; --surface: #151a22; --stage: #0b0e13; --ink: #e5e9f0;
+    --muted: #9aa4b4; --faint: #6c7686; --rule: #262d38; --grid: #1c222b;
+    --pos: #ff6a5f; --neg: #5f9dff; --bond: #56606f; --accent: #8f9bff;
+    --warn: #e0a54a; --crit: #ff6a5f;
+    --c1: #ff6a5f; --c2: #5f9dff; --c3: #4cc38a; --c4: #b98af0;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--font);
+    font-size: 14px; line-height: 1.5; padding: 20px 16px 40px;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; display: grid; gap: 20px; }
+
+  header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 2px 0 0; max-width: 62ch; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+
+  .seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; padding: 3px; background: var(--surface); gap: 2px; }
+  .seg button {
+    font: 500 13px var(--font); color: var(--muted); background: transparent; border: 0;
+    padding: 6px 12px; border-radius: 6px; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .main { grid-template-columns: 1fr; } }
+
+  .stage-card { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; display: grid; gap: 10px; }
+  .stage-wrap { position: relative; aspect-ratio: 1 / 1; max-width: 100%; width: 100%; background: var(--stage); border-radius: 6px; overflow: hidden; }
+  #stage { width: 100%; height: 100%; display: block; }
+  .overlay { position: absolute; left: 10px; top: 8px; font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; pointer-events: none; }
+  .chip { font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); white-space: nowrap; }
+  .chip.bath { border-color: color-mix(in srgb, var(--warn) 55%, var(--rule)); color: var(--warn); }
+  .chip.iso { border-color: color-mix(in srgb, var(--accent) 55%, var(--rule)); color: var(--accent); }
+  .chip.alert { border-color: color-mix(in srgb, var(--crit) 60%, var(--rule)); color: var(--crit); }
+
+  .transport { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
+  .btn { font: 500 13px var(--font); background: var(--ink); color: var(--bg); border: 0; border-radius: 7px; padding: 7px 14px; cursor: pointer; min-width: 74px; }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--rule); min-width: 0; }
+  .scrub { position: relative; height: 28px; }
+  .scrub-bands { position: absolute; left: 0; right: 0; top: 11px; height: 6px; border-radius: 3px; overflow: hidden; display: flex; background: var(--grid); }
+  .scrub-bands span { display: block; height: 100%; }
+  .scrub-ticks { position: absolute; left: 0; right: 0; top: 2px; height: 6px; }
+  .scrub-ticks i { position: absolute; width: 2px; height: 6px; background: var(--crit); border-radius: 1px; }
+  #scrub { position: absolute; inset: 0; width: 100%; margin: 0; background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer; }
+  #scrub::-webkit-slider-runnable-track { height: 28px; background: transparent; }
+  #scrub::-moz-range-track { height: 28px; background: transparent; }
+  #scrub::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: 7px; border-radius: 50%; background: var(--ink); border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--ink); }
+  #scrub::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--ink); border: 2px solid var(--surface); }
+  .opts { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; color: var(--muted); font-size: 13px; }
+  .opts label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+  .opts select { font: 13px var(--font); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 3px 6px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: -1px; margin-right: 5px; }
+  .dot.sm { width: 6px; height: 6px; vertical-align: 0; }
+  .line { display: inline-block; width: 14px; height: 2px; vertical-align: 3px; margin-right: 5px; background: var(--bond); }
+
+  aside { display: grid; gap: 14px; }
+  .panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; }
+  .panel h2 { font-size: 13px; font-weight: 600; margin: 0 0 10px; }
+  dl.read { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; margin: 0; }
+  dl.read dt { color: var(--muted); }
+  dl.read dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+  dl.read .group { border-top: 1px solid var(--rule); margin-top: 4px; padding-top: 8px; }
+  .notes { color: var(--muted); font-size: 13px; display: grid; gap: 8px; }
+  .notes p { margin: 0; }
+  .notes strong { color: var(--ink); font-weight: 600; }
+  code { font-family: var(--mono); font-size: 12px; }
+
+  .charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 720px) { .charts { grid-template-columns: 1fr; } }
+  .chart { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 14px 10px; display: grid; gap: 6px; }
+  .chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; align-items: baseline; }
+  .chart h3 { font-size: 13px; font-weight: 600; margin: 0; }
+  .chart .keys { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+  .chart .keys b { font-family: var(--mono); font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .chart canvas { width: 100%; height: 150px; display: block; cursor: crosshair; touch-action: none; }
+
+  .anoms { max-height: 220px; overflow: auto; font-family: var(--mono); font-size: 12px; display: grid; gap: 2px; }
+  .anoms button { all: unset; cursor: pointer; display: grid; grid-template-columns: 70px 1fr; gap: 8px; padding: 3px 6px; border-radius: 5px; }
+  .anoms button:hover, .anoms button:focus-visible { background: var(--grid); }
+  .anoms .sing { color: var(--crit); }
+  .anoms .num { color: var(--warn); }
+  .empty { color: var(--muted); font-size: 13px; }
+  #status { color: var(--muted); }
+  footer { color: var(--faint); font-size: 12px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">Particle sim · Phase 1 replay</div>
+      <h1>Do atoms emerge from bare charges?</h1>
+      <p class="sub">200 point charges with only a force law and a slowly cooling heat bath. Nothing in the code mentions atoms or bonds. This is a frame-by-frame replay of the recorded Python run.</p>
+    </div>
+    <div class="seg" role="group" aria-label="Choose run">
+      <button id="run-core" aria-pressed="true" data-run="with_core">With core</button>
+      <button id="run-nocore" aria-pressed="false" data-run="no_core">Core removed</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <section class="stage-card" aria-label="Simulation replay">
+      <div class="stage-wrap">
+        <canvas id="stage" aria-label="Particle positions"></canvas>
+        <div class="overlay"><span id="ov-time">t = 0.0</span><span id="ov-stage" class="chip">loading</span></div>
+      </div>
+      <div class="transport">
+        <button class="btn" id="play">Pause</button>
+        <div class="scrub">
+          <div class="scrub-bands" id="bands"></div>
+          <div class="scrub-ticks" id="ticks"></div>
+          <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Replay position">
+        </div>
+        <button class="btn ghost" id="restart" aria-label="Restart replay">Restart</button>
+      </div>
+      <div class="opts">
+        <label for="speed">Speed
+          <select id="speed">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+            <option value="4">4×</option>
+          </select>
+        </label>
+        <label for="color">Colour
+          <select id="color">
+            <option value="charge" selected>by charge</option>
+            <option value="cluster">by cluster</option>
+          </select>
+        </label>
+        <label for="show-bonds"><input type="checkbox" id="show-bonds" checked> Bound pairs</label>
+      </div>
+      <div class="legend" id="legend"></div>
+    </section>
+
+    <aside>
+      <div class="panel">
+        <h2>Readout at this frame</h2>
+        <dl class="read">
+          <dt>Time</dt><dd id="r-time">–</dd>
+          <dt>Stage</dt><dd id="r-stage">–</dd>
+          <dt>Measured temperature</dt><dd id="r-T">–</dd>
+          <dt>Total energy</dt><dd id="r-E">–</dd>
+          <dt class="group">Free particles</dt><dd class="group" id="r-free">–</dd>
+          <dt>Clusters (2+)</dt><dd id="r-clusters">–</dd>
+          <dt>Largest cluster</dt><dd id="r-largest">–</dd>
+          <dt>Neutral p+e pairs</dt><dd id="r-pairs">–</dd>
+          <dt>Binding energy / particle</dt><dd id="r-bind">–</dd>
+          <dt>Bond persistence</dt><dd id="r-persist">–</dd>
+        </dl>
+      </div>
+      <div class="panel">
+        <h2>What this run shows</h2>
+        <div class="notes" id="notes"><p id="status">Loading run data…</p></div>
+      </div>
+    </aside>
+  </div>
+
+  <section class="charts" aria-label="Diagnostics over time">
+    <div class="chart" data-chart="temp"><div class="chart-head"><h3>Temperature</h3><div class="keys"></div></div><canvas></canvas></div>
+    <div class="chart" data-chart="energy"><div class="chart-head"><h3>Energy</h3><div class="keys"></div></div><canvas></canvas></div>
+    <div class="chart" data-chart="struct"><div class="chart-head"><h3>Emergent structure</h3><div class="keys"></div></div><canvas></canvas></div>
+    <div class="chart" data-chart="entropy"><div class="chart-head"><h3>Entropy proxies (normalised)</h3><div class="keys"></div></div><canvas></canvas></div>
+  </section>
+
+  <section class="panel">
+    <h2>Anomaly log</h2>
+    <div id="anoms" class="anoms"></div>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const runs = {};
+  let run = null, frame = 0, playing = true, speed = 1, acc = 0, last = 0;
+  const FPS = 20;
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---------- theme ----------
+  let T = {};
+  function readTheme() {
+    const cs = getComputedStyle(document.documentElement);
+    for (const k of ["bg","surface","stage","ink","muted","faint","rule","grid","pos","neg","bond","accent","warn","crit","c1","c2","c3","c4"])
+      T[k] = cs.getPropertyValue("--" + k).trim();
+    T.mono = cs.getPropertyValue("--mono").trim();
+    T.dark = cs.colorScheme.includes("dark");
+  }
+  readTheme();
+  const rethemed = () => { readTheme(); if (run) { buildCharts(); render(); } };
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rethemed);
+  new MutationObserver(rethemed).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  // ---------- data ----------
+  function u16(b64) {
+    const bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Uint16Array(bytes.buffer);
+  }
+  async function load(name) {
+    if (runs[name]) return runs[name];
+    const res = await fetch("data/" + name + ".json");
+    if (!res.ok) throw new Error("Could not load data/" + name + ".json (HTTP " + res.status + ")");
+    const d = await res.json();
+    d.pos = u16(d.frames.pos); d.labels = u16(d.frames.labels); d.bonds = u16(d.frames.bonds);
+    d.nf = d.frames.count;
+    const s = d.series;
+    d.isoStart = s.segment.indexOf("isolated");
+    d.lnN = Math.log(d.meta.n);
+    s.size_entropy_n = s.size_entropy.map((v) => v == null ? null : v / d.lnN);
+    return (runs[name] = d);
+  }
+
+  // ---------- stage ----------
+  const stage = $("stage"), sctx = stage.getContext("2d");
+  function sizeCanvas(c, ctx) {
+    const r = c.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { w: r.width, h: r.height };
+  }
+  const hue = (l) => (l * 137.508) % 360;
+
+  function drawStage() {
+    const { w, h } = sizeCanvas(stage, sctx);
+    const m = run.meta, n = m.n, dim = m.dim, f = frame;
+    const pad = 8, s = (Math.min(w, h) - 2 * pad);
+    const X = (i) => pad + run.pos[(f * n + i) * dim] / 65535 * s;
+    const Y = (i) => pad + (1 - run.pos[(f * n + i) * dim + 1] / 65535) * s;
+    sctx.fillStyle = T.stage; sctx.fillRect(0, 0, w, h);
+    sctx.strokeStyle = T.rule; sctx.lineWidth = 1; sctx.strokeRect(pad - 0.5, pad - 0.5, s + 1, s + 1);
+
+    const labels = run.labels.subarray(f * n, (f + 1) * n);
+    const byCluster = $("color").value === "cluster";
+    let sizes = null;
+    if (byCluster) { sizes = new Map(); for (const l of labels) sizes.set(l, (sizes.get(l) || 0) + 1); }
+
+    if ($("show-bonds").checked) {
+      const a = run.frames.bond_offsets[f], b = run.frames.bond_offsets[f + 1];
+      sctx.strokeStyle = T.bond; sctx.lineWidth = 1.2; sctx.beginPath();
+      for (let k = a; k < b; k++) {
+        const i = run.bonds[2 * k], j = run.bonds[2 * k + 1];
+        sctx.moveTo(X(i), Y(i)); sctx.lineTo(X(j), Y(j));
+      }
+      sctx.stroke();
+    }
+    const unit = s / m.box;                       // pixels per simulation length unit
+    const rHeavy = Math.max(2.5, 0.28 * unit), rLight = Math.max(1.6, 0.16 * unit);
+    for (let pass = 0; pass < 2; pass++) {        // heavy first, light on top
+      for (let i = 0; i < n; i++) {
+        const heavy = m.species[m.kind[i]].charge > 0;
+        if ((pass === 0) !== heavy) continue;
+        let r = heavy ? rHeavy : rLight;
+        if (dim === 3) r *= 0.7 + 0.6 * run.pos[(f * n + i) * dim + 2] / 65535;
+        if (byCluster) {
+          const sz = sizes.get(labels[i]);
+          sctx.fillStyle = sz < 2 ? T.faint : `hsl(${hue(labels[i])} ${T.dark ? 70 : 62}% ${T.dark ? 62 : 46}%)`;
+        } else sctx.fillStyle = heavy ? T.pos : T.neg;
+        sctx.beginPath(); sctx.arc(X(i), Y(i), r, 0, 6.2832); sctx.fill();
+      }
+    }
+  }
+
+  // ---------- charts ----------
+  const chartDefs = {
+    temp:   { lines: [["T_kin", "measured", "c1"], ["T_bath", "bath", "faint", [4, 3]]], fmt: (v) => v.toFixed(2) },
+    energy: { lines: [["KE", "kinetic", "c2"], ["PE", "potential", "c4"], ["E", "total", "ink"]], fmt: (v) => v.toFixed(1) },
+    struct: { lines: [["free", "free", "c2"], ["clusters", "clusters", "c3"], ["largest", "largest", "c1"], ["pairs_1p1e", "p+e pairs", "c4"]], fmt: (v) => v.toFixed(0) },
+    entropy:{ lines: [["spatial_entropy", "spatial", "c3"], ["size_entropy_n", "cluster-size", "c4"]], fmt: (v) => v.toFixed(3) },
+  };
+  const charts = [];
+  function buildCharts() {
+    charts.length = 0;
+    document.querySelectorAll(".chart").forEach((el) => {
+      const def = chartDefs[el.dataset.chart], c = el.querySelector("canvas"), ctx = c.getContext("2d");
+      const keys = el.querySelector(".keys");
+      keys.innerHTML = def.lines.map(([k, lab, col]) =>
+        `<span><span class="line" style="background:${T[col]}"></span>${lab} <b data-k="${k}">–</b></span>`).join("");
+      const { w, h } = sizeCanvas(c, ctx);
+      let lo = Infinity, hi = -Infinity;
+      for (const [k] of def.lines) for (const v of run.series[k]) if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+      if (hi - lo < 1e-9) { hi += 1; lo -= 1; }
+      const span = hi - lo; lo -= span * 0.06; hi += span * 0.06;
+      const L = 44, R = 6, Tp = 6, B = 18, pw = w - L - R, ph = h - Tp - B;
+      const xs = (i) => L + (i / Math.max(run.nf - 1, 1)) * pw;
+      const ys = (v) => Tp + (1 - (v - lo) / (hi - lo)) * ph;
+
+      const off = document.createElement("canvas"); off.width = c.width; off.height = c.height;
+      const o = off.getContext("2d"); o.setTransform(c.width / w, 0, 0, c.height / h, 0, 0);
+      o.font = `10px ${T.mono}`; o.textBaseline = "middle";
+      for (let g = 0; g <= 3; g++) {
+        const v = lo + (hi - lo) * (g / 3), y = ys(v);
+        o.strokeStyle = T.grid; o.lineWidth = 1; o.beginPath(); o.moveTo(L, y); o.lineTo(L + pw, y); o.stroke();
+        o.fillStyle = T.faint; o.textAlign = "right"; o.fillText(def.fmt(v), L - 6, y);
+      }
+      const tEnd = run.series.time[run.nf - 1];
+      o.textAlign = "center"; o.textBaseline = "top";
+      for (let g = 0; g <= 4; g++) {
+        const i = Math.round((run.nf - 1) * g / 4);
+        o.fillStyle = T.faint; o.textAlign = g === 0 ? "left" : g === 4 ? "right" : "center";
+        o.fillText(Math.round(run.series.time[i]), xs(i), Tp + ph + 4);
+      }
+      if (run.isoStart > 0) {
+        const x = xs(run.isoStart);
+        o.strokeStyle = T.muted; o.setLineDash([2, 3]); o.beginPath(); o.moveTo(x, Tp); o.lineTo(x, Tp + ph); o.stroke(); o.setLineDash([]);
+        o.fillStyle = T.muted; o.textAlign = "left"; o.fillText("bath off", x + 4, Tp);
+      }
+      for (const [k, , col, dash] of def.lines) {
+        const arr = run.series[k];
+        o.strokeStyle = T[col]; o.lineWidth = k === "E" ? 2 : 1.4; o.setLineDash(dash || []);
+        o.beginPath(); let pen = false;
+        arr.forEach((v, i) => { if (v == null) { pen = false; return; } pen ? o.lineTo(xs(i), ys(v)) : o.moveTo(xs(i), ys(v)); pen = true; });
+        o.stroke(); o.setLineDash([]);
+      }
+      const seek = (ev) => {
+        const r = c.getBoundingClientRect();
+        const i = Math.round(((ev.clientX - r.left) - L) / pw * (run.nf - 1));
+        setFrame(Math.max(0, Math.min(run.nf - 1, i)));
+      };
+      c.onpointerdown = (ev) => { c.setPointerCapture(ev.pointerId); pause(); seek(ev); c.onpointermove = seek; };
+      c.onpointerup = () => { c.onpointermove = null; };
+      charts.push({ el, def, c, ctx, off, w, h, xs, ys, L, Tp, ph, tEnd });
+    });
+  }
+  function drawCharts() {
+    for (const ch of charts) {
+      const { ctx, c, off, w, h, xs, ys, Tp, ph, def, el } = ch;
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height); ctx.drawImage(off, 0, 0);
+      ctx.setTransform(c.width / w, 0, 0, c.height / h, 0, 0);
+      const x = xs(frame);
+      ctx.strokeStyle = T.ink; ctx.globalAlpha = 0.35; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, Tp); ctx.lineTo(x, Tp + ph); ctx.stroke(); ctx.globalAlpha = 1;
+      for (const [k, , col] of def.lines) {
+        const v = run.series[k][frame];
+        const out = el.querySelector(`b[data-k="${k}"]`);
+        if (out) out.textContent = v == null ? "–" : def.fmt(v);
+        if (v == null) continue;
+        ctx.fillStyle = T[col]; ctx.beginPath(); ctx.arc(x, ys(v), 3, 0, 6.2832); ctx.fill();
+      }
+    }
+  }
+
+  // ---------- readouts ----------
+  const fx = (v, d = 2) => v == null || Number.isNaN(v) ? "–" : Number(v).toFixed(d);
+  function drawReadout() {
+    const s = run.series, f = frame, iso = s.segment[f] === "isolated";
+    $("ov-time").textContent = "t = " + fx(s.time[f], 1);
+    const chip = $("ov-stage");
+    chip.textContent = iso ? "isolated · bath off" : "cooling · bath T " + fx(s.T_bath[f]);
+    chip.className = "chip " + (iso ? "iso" : "bath");
+    $("r-time").textContent = fx(s.time[f], 2);
+    $("r-stage").textContent = iso ? "isolated" : "cooling";
+    $("r-T").textContent = fx(s.T_kin[f], 3);
+    $("r-E").textContent = fx(s.E[f], 2);
+    $("r-free").textContent = s.free[f] + " / " + run.meta.n;
+    $("r-clusters").textContent = s.clusters[f];
+    $("r-largest").textContent = s.largest[f];
+    $("r-pairs").textContent = s.pairs_1p1e[f];
+    $("r-bind").textContent = fx(s.bind_per_particle[f], 3);
+    $("r-persist").textContent = s.bond_persistence[f] == null ? "–" : Math.round(s.bond_persistence[f] * 100) + "%";
+  }
+
+  function render() { drawStage(); drawCharts(); drawReadout(); $("scrub").value = frame; }
+  function setFrame(i) { frame = i; render(); }
+
+  // ---------- run-level UI ----------
+  function setupRun() {
+    const s = run.series, m = run.meta, nf = run.nf;
+    $("scrub").max = nf - 1;
+    const iso = run.isoStart > 0 ? run.isoStart / (nf - 1) : 1;
+    $("bands").innerHTML = `<span style="width:${iso * 100}%;background:color-mix(in srgb, ${T.warn} 35%, transparent)"></span>` +
+      `<span style="width:${(1 - iso) * 100}%;background:color-mix(in srgb, ${T.accent} 35%, transparent)"></span>`;
+    const steps = s.step[nf - 1];
+    $("ticks").innerHTML = run.anomalies.map((a) => `<i style="left:calc(${Math.min(a.step / steps, 1) * 100}% - 1px)" title="${a.kind} at t=${a.time}"></i>`).join("");
+
+    const heavy = m.species.find((x) => x.charge > 0), light = m.species.find((x) => x.charge < 0);
+    $("legend").innerHTML = $("color").value === "cluster"
+      ? `<span>Each colour is one bound cluster</span><span><span class="dot" style="background:${T.faint}"></span>free particle</span><span><span class="line"></span>bound pair (E<sub>pair</sub> &lt; 0, r &lt; ${m.r_bond})</span>`
+      : `<span><span class="dot" style="background:${T.pos}"></span>+ charge, mass ${heavy.mass}</span><span><span class="dot sm" style="background:${T.neg}"></span>− charge, mass ${light.mass}</span><span><span class="line"></span>bound pair (E<sub>pair</sub> &lt; 0, r &lt; ${m.r_bond})</span>`;
+
+    const a = s.free[0], b = s.free[nf - 1], isoE = s.E.slice(run.isoStart).filter((v) => v != null);
+    const drift = isoE.length ? Math.abs(isoE[isoE.length - 1] - isoE[0]) / Math.abs(isoE[0]) : NaN;
+    const sing = run.anomalies.filter((x) => x.category === "singularity").length;
+    const num = run.anomalies.filter((x) => x.category === "numerical").length;
+    const persist = s.bond_persistence.slice(run.isoStart).filter((v) => v != null);
+    const meanP = persist.reduce((x, y) => x + y, 0) / Math.max(persist.length, 1);
+    const hasCore = m.rules.includes("CoreRepulsion");
+    const story = hasCore
+      ? `<p><strong>Rules:</strong> Coulomb attraction/repulsion plus a short-range repulsive core (1/r<sup>8</sup>). No other rules.</p>
+         <p>As the bath cools, free particles drop from <strong>${a}</strong> to <strong>${b}</strong>. They do not settle as isolated atoms. They link into alternating +/− chains and networks, like a tiny ionic solid. That is what classical physics predicts.</p>
+         <p>With the bath off, energy drifts by only <strong>${drift.toExponential(1)}</strong> and <strong>${Math.round(meanP * 100)}%</strong> of bonds survive between frames, so the structures are stable on their own.</p>`
+      : `<p><strong>Rules:</strong> Coulomb only. The short-range core is switched off.</p>
+         <p>Opposite charges now have nothing stopping them at r → 0, so pairs fall into each other. The anomaly monitor raised <strong>${sing}</strong> singularity flags (capped at 20) and <strong>${num}</strong> energy-drift flags.</p>
+         <p>This is the classical collapse that forced physics to invent quantum mechanics, found here by the monitor rather than written into the code.</p>`;
+    $("notes").innerHTML = story;
+    $("foot").innerHTML = `${m.n} particles · ${m.dim}D · box ${m.box} · dt ${m.dt} · frame every ${m.log_every} steps · rules: ${m.rules.join(", ")}`;
+
+    $("anoms").innerHTML = run.anomalies.length
+      ? run.anomalies.map((x, i) => `<button data-i="${i}"><span>t=${Number(x.time).toFixed(2)}</span><span class="${x.category === "singularity" ? "sing" : "num"}">${x.category}: ${x.kind}${x.pairs ? ` (${x.pairs} pair${x.pairs > 1 ? "s" : ""})` : ""}${x.rel_drift ? ` rel. drift ${Number(x.rel_drift).toExponential(1)}` : ""}</span></button>`).join("")
+      : `<p class="empty">No anomalies in this run. Energy was conserved within tolerance and no particles reached the singular distance.</p>`;
+    $("anoms").querySelectorAll("button").forEach((btn) => btn.onclick = () => {
+      // frame i was recorded at step (i + 1) * log_every
+      const ev = run.anomalies[+btn.dataset.i]; pause();
+      setFrame(Math.max(0, Math.min(nf - 1, Math.round(ev.step / m.log_every) - 1)));
+    });
+  }
+
+  async function choose(name) {
+    document.querySelectorAll(".seg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.run === name)));
+    try {
+      run = await load(name);
+    } catch (e) {
+      $("notes").innerHTML = `<p>${e.message}. If you opened this file directly, serve the folder instead: <code>python -m http.server</code> in <code>viewer/</code>.</p>`;
+      return;
+    }
+    frame = Math.min(frame, run.nf - 1);
+    buildCharts(); setupRun(); render();
+  }
+
+  // ---------- playback ----------
+  function play() { playing = true; $("play").textContent = "Pause"; if (run && frame >= run.nf - 1) setFrame(0); }
+  function pause() { playing = false; $("play").textContent = "Play"; }
+  function tick(ts) {
+    if (playing && run) {
+      acc += Math.min(ts - (last || ts), 100) / 1000 * FPS * speed;
+      const step = Math.floor(acc);
+      if (step > 0) {
+        acc -= step;
+        const nf = Math.min(frame + step, run.nf - 1);
+        setFrame(nf);
+        if (nf >= run.nf - 1) pause();
+      }
+    }
+    last = ts;
+    requestAnimationFrame(tick);
+  }
+
+  $("play").onclick = () => (playing ? pause() : play());
+  $("restart").onclick = () => { setFrame(0); play(); };
+  $("scrub").oninput = (e) => { pause(); setFrame(+e.target.value); };
+  $("speed").onchange = (e) => (speed = +e.target.value);
+  $("color").onchange = () => { setupRun(); render(); };
+  $("show-bonds").onchange = render;
+  document.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => choose(b.dataset.run)));
+  let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (run) { buildCharts(); render(); } }, 120); });
+
+  (async () => {
+    await choose("with_core");
+    if (reduceMotion || !run) { pause(); if (run) setFrame(run.nf - 1); }
+    requestAnimationFrame(tick);
+  })();
+})();
+</script>
