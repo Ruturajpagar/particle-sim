@@ -1,0 +1,52 @@
+{
+  "git_commit": "e80d6f52f887cf3fa0de31102403fe5f81de493b",
+  "measured_eV": {
+    "H": 13.598434,
+    "He": 79.00515,
+    "Li+": 198.09445,
+    "Li": 203.486165,
+    "H electron affinity": 0.754195,
+    "Li ionization": 5.391715,
+    "H2 De": 4.7474,
+    "H2 D0": 4.4781,
+    "H2 Re": 1.4011
+  },
+  "wave_packets": {
+    "H binding": 11.028136850150455,
+    "He binding": 61.48513401450558,
+    "Li+ binding": 159.63578709693306,
+    "Li binding": 164.94331113621269,
+    "H electron affinity": -4.0736764770343825e-05,
+    "Li ionization": 5.3075240392796275,
+    "H2 bond": 2.605654688212102,
+    "H2 bond length": 1.5496,
+    "H2 parallel-spin bond": -1.0023626373367733e-10,
+    "H3 beyond H2+H": 5.430099414205358e-05,
+    "He2 bond": -2.1174173525650986e-12
+  },
+  "wave_packets_fixed_nuclei": {
+    "H binding": 11.548853861725643,
+    "He binding": 62.61300911619194,
+    "Li+ binding": 161.76911633820225,
+    "Li binding": 167.0978324756531,
+    "H electron affinity": -4.074034428036555e-05,
+    "Li ionization": 5.32871613745084,
+    "H2 bond": 2.914571966359407,
+    "H2 bond length": 1.4741,
+    "H2 parallel-spin bond": -4.3928594095632434e-10,
+    "H3 beyond H2+H": 4.896335811821473e-05,
+    "He2 bond": -9.904394460136245e-08
+  },
+  "phase2_wall": {
+    "H binding": 13.590197737929154,
+    "He binding": 83.2785987905519,
+    "Li+ binding": 205.71597714633592,
+    "Li binding": 220.1481220555273,
+    "H electron affinity": 1.7073875836996564,
+    "Li ionization": 14.43214490919138,
+    "H2 bond": 18.21451076519131,
+    "H2 parallel-spin bond": 11.39678283639753,
+    "H3 beyond H2+H": 11.317972940409872
+  },
+  "wall_s": 252.2
+}
