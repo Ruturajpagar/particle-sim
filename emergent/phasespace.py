@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .forces import DirectForceField
-from .interactions import PairInteraction, UncertaintyCore
+from .interactions import PairInteraction
 from .state import Species, State
 
 
@@ -32,16 +32,23 @@ class PhaseSpaceSystem:
     species: list[Species]
     kind: np.ndarray
     position_rules: list[PairInteraction]
-    momentum_rules: list[UncertaintyCore] = field(default_factory=list)
+    momentum_rules: list = field(default_factory=list)   # UncertaintyCore, PauliCore, ...
     r_min: float = 1e-6
+    spin: np.ndarray | None = None    # per-particle spin projection (e.g. +1 / -1)
 
     def __post_init__(self) -> None:
         dim = 3
+        self.kind = np.asarray(self.kind)
+        self.spin = np.zeros(len(self.kind)) if self.spin is None else np.asarray(self.spin)
+        if len(self.spin) != len(self.kind):
+            raise ValueError("spin needs one entry per particle")
         self._state = State(dim=dim, species=self.species,
                             pos=np.zeros((len(self.kind), dim)),
-                            vel=np.zeros((len(self.kind), dim)), kind=np.asarray(self.kind))
+                            vel=np.zeros((len(self.kind), dim)), kind=self.kind)
         self.mass = self._state.mass
         self._field = DirectForceField(self.position_rules, r_min=self.r_min)
+        for rule in self.momentum_rules:
+            rule.bind(self)
 
     def _position_part(self, q: np.ndarray):
         if self._state.pos.shape != q.shape:

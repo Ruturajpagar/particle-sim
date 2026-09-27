@@ -20,6 +20,7 @@ class Species:
     mass: float
     charge: float = 0.0
     strong: float = 0.0
+    fermion: bool = True   # half-integer spin: identical ones obey Pauli exclusion
 
 
 @dataclass
