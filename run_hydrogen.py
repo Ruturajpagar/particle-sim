@@ -128,6 +128,60 @@ def settle(alpha, seed, t_end=T_END):
     return tr.q[-1], tr.p[-1]
 
 
+# Other two-body systems, same rule, no new constants. Measured binding
+# energies for comparison: H 13.598434 eV and He+ 54.417763 eV (NIST ionization
+# energies), positronium 6.80 eV (ground-state binding).
+UNIVERSALITY = [
+    ("hydrogen", Species("p", 1836.15267, +1.0), 13.598434),
+    ("He+ ion", Species("alpha", 7294.29954, +2.0), 54.417763),
+    ("positronium", Species("positron", 1.0, +1.0), 6.80),
+]
+
+
+def run_universal(args):
+    name, nucleus, alpha, seed, halve = args
+    Z = nucleus.charge
+    mu = nucleus.mass / (nucleus.mass + 1.0)
+    scale = Z ** 2 * mu               # energy scale; time scales as 1/scale
+    sys_ = PhaseSpaceSystem([nucleus, ELECTRON], np.array([0, 1]), [Coulomb(k=1.0)],
+                            [UncertaintyCore(xi=1.0, hbar=1.0, alpha=alpha)], r_min=1e-4)
+    rng = np.random.default_rng(seed)
+    r0 = rng.uniform(3, 8) / (Z * mu)
+    pmag = np.sqrt(2 * mu * (rng.uniform(-0.15, 0.0) * scale + Z / r0))
+    rhat = rng.normal(size=3); rhat /= np.linalg.norm(rhat)
+    phat = rng.normal(size=3); phat /= np.linalg.norm(phat)
+    q = np.array([np.zeros(3), r0 * rhat]); p = np.array([-pmag * phat, pmag * phat])
+    dt = DT / scale / (2 if halve else 1)
+    steps = int(T_END / scale / dt)
+    tr = integrate(sys_, q, p, dt, steps, gamma=GAMMA * scale, record_every=steps)
+    P = tr.p[-1].sum(0)
+    e = sys_.energy(tr.q[-1], tr.p[-1]) - float(P @ P) / (2 * sys_.mass.sum())
+    return {"system": name, "alpha": alpha, "seed": seed, "halved_dt": halve,
+            "E_hartree": e, "E_eV": e * HARTREE_EV}
+
+
+def universality_table(pool) -> list[dict]:
+    alphas = [10.0, 20.0, 40.0]
+    jobs = [(n, nuc, a, s, False) for n, nuc, _ in UNIVERSALITY for a in alphas for s in range(3)]
+    jobs += [(n, nuc, 40.0, 0, True) for n, nuc, _ in UNIVERSALITY]
+    res = pool.map(run_universal, jobs)
+    rows = []
+    for name, nuc, measured in UNIVERSALITY:
+        E = {a: np.mean([r["E_eV"] for r in res if r["system"] == name and r["alpha"] == a
+                         and not r["halved_dt"]]) for a in alphas}
+        spread = max(np.ptp([r["E_eV"] for r in res if r["system"] == name and r["alpha"] == a
+                             and not r["halved_dt"]]) for a in alphas)
+        half = next(r["E_eV"] for r in res if r["system"] == name and r["halved_dt"])
+        # Richardson extrapolation in 1/α from α = 20 and 40 (no model formula used)
+        e_inf = 2 * E[40.0] - E[20.0]
+        rows.append({"system": name, "E_alpha10_eV": E[10.0], "E_alpha20_eV": E[20.0],
+                     "E_alpha40_eV": E[40.0], "E_extrapolated_eV": e_inf,
+                     "measured_binding_eV": measured,
+                     "error_percent": 100 * (-e_inf - measured) / measured,
+                     "seed_spread_eV": spread, "dt_check_eV": half - E[40.0]})
+    return rows
+
+
 def make_figure(results: list[dict], alphas: list[float], path: str) -> None:
     import matplotlib
     matplotlib.use("Agg")
@@ -187,6 +241,11 @@ def main() -> None:
     t0 = time.perf_counter()
     with get_context("fork").Pool(4) as pool:
         results = pool.map(run_case, jobs)
+        universal = universality_table(pool)
+    with open(f"{OUT}/universality.csv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=list(universal[0]))
+        w.writeheader()
+        w.writerows(universal)
 
     q_set, p_set = settle(10.0, seed=3)
     stab = stability_check(q_set, p_set, 10.0)
@@ -229,6 +288,13 @@ def main() -> None:
     print("\n=== C: stability after a 10% kick, no friction, 100 a.u. ===")
     print(f"  r stays in [{stab['r_min']:.3f}, {stab['r_max']:.3f}] a0, "
           f"relative energy drift {stab['rel_energy_drift']:.1e}")
+    print("\n=== E: same rule, other two-body systems (binding energy, eV) ===")
+    print(f"  {'system':<12} {'α=10':>9} {'α=20':>9} {'α=40':>9} {'α→∞':>9} {'measured':>9} {'error':>7}")
+    for u in universal:
+        print(f"  {u['system']:<12} {-u['E_alpha10_eV']:>9.3f} {-u['E_alpha20_eV']:>9.3f} "
+              f"{-u['E_alpha40_eV']:>9.3f} {-u['E_extrapolated_eV']:>9.3f} "
+              f"{u['measured_binding_eV']:>9.3f} {u['error_percent']:>+6.2f}%   "
+              f"(seed spread {u['seed_spread_eV']:.1e}, dt/2 change {u['dt_check_eV']:+.1e})")
     make_figure(results, alphas, f"{OUT}/hydrogen.png")
     print(f"\n{len(jobs)} runs in {time.perf_counter() - t0:.0f} s -> {OUT}/")
 

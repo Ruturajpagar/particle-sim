@@ -1,5 +1,5 @@
 {
-  "git_commit": "7054d5bb69c75a996e7ee45deb81eecb9f62b96d",
+  "git_commit": "f56825ee0609cd767ccc291c855702a56e81c29d",
   "gamma": 0.3,
   "dt": 0.002,
   "t_end": 150.0,
@@ -11,5 +11,5 @@
     "E_kicked": -0.47514371453863924,
     "rel_energy_drift": 2.6019261356993213e-12
   },
-  "wall_s": 318.5
+  "wall_s": 303.3
 }
