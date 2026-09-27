@@ -46,6 +46,22 @@ pairwise uncertainty rule. The Pauli rule makes lithium grow a second shell
 on its own, but no single Pauli strength gets lithium, H₂ with parallel spins
 and H₃ right together.
 
+## Phase 3: every particle is a wave packet
+
+```
+python run_wavepacket.py        # ~4 min on 4 cores
+```
+
+Each particle (nucleus or electron) is a Gaussian wave with its own width;
+Coulomb acts between charge clouds; identical same-spin fermions are
+antisymmetric. Only ħ, masses, charges and spins; every particle starts at a
+random point. Result (`results/wavepacket/FINDINGS.md`): a covalent H₂ bond
+forms (2.6 eV, measured 4.75), H₂ with parallel spins, H₃ and He₂ do not
+bind, and lithium grows a second shell with ionization energy 5.31 eV
+(measured 5.39), all with no constant to tune. Absolute atomic energies are
+~20% too weak (the one-Gaussian shape), and H⁻ does not bind (no
+correlation).
+
 ## Experiments
 
 An experiment is a TOML file in `experiments/`: species, rules, protocol,
