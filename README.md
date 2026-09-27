@@ -31,6 +31,21 @@ Coulomb + the uncertainty wall settles every random start into one ground
 state, and the same rule predicts the binding energies of hydrogen, He⁺ and
 positronium within 0.03% of measurement, with nothing fitted.
 
+### Multi-electron systems and the Pauli rule
+
+```
+python run_multielectron.py     # ~3 min on 4 cores
+```
+
+Adds spin, a fermion/boson flag and `PauliCore` (identical same-spin
+fermions only), and finds ground states with `emergent/groundstate.py`.
+Result (`results/multielectron/FINDINGS.md`): with no free constants,
+two-electron atoms reproduce Bohr's 1913 model exactly (helium 5% overbound,
+as historically), but H₂ is bound 3.8× too strongly. That is a hole in the
+pairwise uncertainty rule. The Pauli rule makes lithium grow a second shell
+on its own, but no single Pauli strength gets lithium, H₂ with parallel spins
+and H₃ right together.
+
 ## Experiments
 
 An experiment is a TOML file in `experiments/`: species, rules, protocol,
