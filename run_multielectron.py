@@ -197,19 +197,22 @@ def make_figure(rows, part1, eH, eLip, eH2, path):
 
     a = ax[0, 0]
     labels = ["H", "He", "Li⁺", "H⁻ electron\naffinity", "H₂ bond"]
-    err = [100 * (p - m) / m for _, p, m, _ in part1]
-    bohr = [100 * (b - m) / m for _, _, m, b in part1]
+    ratio = [p / m for _, p, m, _ in part1]
+    bohr = [b / m for _, _, m, b in part1]
     x = np.arange(len(labels))
-    a.bar(x - 0.2, err, 0.4, color=["C2", "C1", "C1", "C3", "C3"], label="this simulation")
+    a.bar(x - 0.2, ratio, 0.4, color=["C2", "C1", "C1", "C3", "C3"], label="this simulation")
     a.bar(x + 0.2, bohr, 0.4, color="0.75", label="Bohr 1913 model")
-    a.axhline(0, color="k", lw=0.8)
+    a.axhline(1.0, color="k", lw=0.8)
     a.set_xticks(x, labels)
-    a.set_yscale("symlog", linthresh=10)
-    a.set_ylabel("error vs measured (%)")
-    a.set_title("Part 1, no free constants: atoms land on Bohr's model; H₂ fails")
-    a.legend(fontsize=9)
-    for xi, e in zip(x, err):
-        a.text(xi - 0.2, e * (1.15 if e > 0 else 1), f"{e:+.1f}%", ha="center", va="bottom", fontsize=8)
+    a.set_yscale("log")
+    a.set_ylim(0.8, 6)
+    a.set_yticks([1, 1.5, 2, 3, 4, 5], ["1 (exact)", "1.5", "2", "3", "4", "5"])
+    a.set_ylabel("predicted ÷ measured")
+    a.set_title("Part 1, no free constants: atoms match Bohr's model; H₂ fails")
+    a.legend(fontsize=9, loc="upper left")
+    for xi, r in zip(x, ratio):
+        a.text(xi - 0.2, r * 1.03, f"×{r:.3f}" if r < 1.5 else f"×{r:.2f}", ha="center",
+               va="bottom", fontsize=8)
 
     xs = XI_P
     a = ax[0, 1]
