@@ -20,10 +20,14 @@ extrapolated to α → ∞.
 """
 from __future__ import annotations
 
-import csv
-import json
 import os
-import subprocess
+
+os.environ.setdefault("OMP_NUM_THREADS", "1")        # one math thread per worker
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+
+import csv  # noqa: E402
+import json  # noqa: E402
+import subprocess  # noqa: E402
 import time
 from multiprocessing import get_context
 
@@ -114,6 +118,7 @@ def solve(args):
     return {"system": name, "xi_P": xi_p, "starts": n_starts,
             **{f"E_a{int(x)}": gs.energy[x] for x in ALPHAS},
             **{f"hits_a{int(x)}": gs.hits[x] for x in ALPHAS},
+            **{f"capped_a{int(x)}": gs.unconverged[x] for x in ALPHAS},
             "E_inf": gs.extrapolated(), "extent": gs.extent[a],
             "nucleus_distances": json.dumps([round(d, 4) for d in nn]),
             "electron_to_nearest_nucleus": json.dumps([round(d, 4) for d in e_nuc]),
@@ -125,8 +130,14 @@ def main() -> None:
     jobs = [(n, 1.0) for n in SYSTEMS if n not in USES_PAULI]
     jobs += [(n, x) for n in SYSTEMS if n in USES_PAULI for x in XI_P]
     t0 = time.perf_counter()
+    rows = []
     with get_context("fork").Pool(4) as pool:
-        rows = pool.map(solve, jobs)
+        for r in pool.imap_unordered(solve, jobs):
+            rows.append(r)
+            print(f"[{len(rows)}/{len(jobs)}] {r['system']} ξ_P={r['xi_P']}: E(α=40) = "
+                  f"{r['E_a40']:.5f}, capped {r['capped_a40']}/{r['starts']} ({r['wall_s']} s)", flush=True)
+    order = {j: i for i, j in enumerate(jobs)}
+    rows.sort(key=lambda r: order[(r["system"], r["xi_P"])])
     with open(f"{OUT}/results.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()

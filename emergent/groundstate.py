@@ -26,8 +26,10 @@ def _pack(q, p):
 
 
 def minimize_energy(system: PhaseSpaceSystem, q0: np.ndarray, p0: np.ndarray,
-                    gtol: float = 1e-9, maxiter: int = 20000):
-    """Local minimum of H(q, p) from (q0, p0). Returns (E, q, p, success)."""
+                    gtol: float = 1e-9, maxiter: int = 4000):
+    """Local minimum of H(q, p) from (q0, p0). Returns (E, q, p, success).
+    success is False when the iteration cap was hit (e.g. fragments slowly
+    drifting apart); callers count those instead of trusting them silently."""
     shape = q0.shape
     n = q0.size
 
@@ -52,6 +54,7 @@ class GroundState:
     alphas: list[float]
     energy: dict[float, float]          # lowest energy found at each α
     hits: dict[float, int]              # starts that reached it (within tol)
+    unconverged: dict[float, int]       # starts that hit the iteration cap
     starts: int
     q: dict[float, np.ndarray]
     p: dict[float, np.ndarray]
@@ -70,14 +73,16 @@ def find_ground_state(system: PhaseSpaceSystem, start: Callable[[np.random.Gener
     rng = np.random.default_rng(seed)
     alphas = list(alphas)
     results = {a: [] for a in alphas}
+    capped = {a: 0 for a in alphas}
     for _ in range(n_starts):
         q, p = start(rng)
         for a in alphas:
             set_stiffness(system, a)
-            e, q, p, _ = minimize_energy(system, q, p)
+            e, q, p, ok = minimize_energy(system, q, p)
+            capped[a] += not ok
             if np.isfinite(e):
                 results[a].append((e, q.copy(), p.copy()))
-    gs = GroundState(alphas, {}, {}, n_starts, {}, {}, {})
+    gs = GroundState(alphas, {}, {}, capped, n_starts, {}, {}, {})
     for a in alphas:
         e, q, p = min(results[a], key=lambda t: t[0])
         gs.energy[a] = e
