@@ -38,7 +38,7 @@ PKG = ROOT / "emergent"
 # Modules that define physics or produce states. Observers (diagnostics, export)
 # and the experiment runner may name structures: they only measure.
 RULE_MODULES = ["state.py", "interactions.py", "forces.py", "integrators.py", "boundaries.py",
-                "phasespace.py", "groundstate.py", "wavepacket.py", "diffusion.py"]
+                "phasespace.py", "groundstate.py", "wavepacket.py", "diffusion.py", "antisymmetry.py"]
 # sim.py runs the loop and also logs observations (bound-pair counts etc.);
 # only its dynamics method is held to the rule-code standard.
 LOOP_MODULE, LOOP_METHOD = "sim.py", "run"
@@ -106,17 +106,18 @@ def check_rule_code(problems: list[str], notes: list[str]) -> None:
 def check_rule_table(problems: list[str], notes: list[str]) -> None:
     principles = (ROOT / "PRINCIPLES.md").read_text()
     classes = []
-    for name in ("interactions.py", "wavepacket.py", "diffusion.py"):
+    for name in ("interactions.py", "wavepacket.py", "diffusion.py", "antisymmetry.py"):
         path = PKG / name
         if path.exists():
             for node in ast.parse(path.read_text()).body:
                 if isinstance(node, ast.ClassDef) and node.name != "PairInteraction" \
                         and not node.name.endswith("Result"):
                     classes.append((name, node.name))
-    listed = {"WavePacketSystem": "Wave packets", "DiffusionSystem": "Diffusion"}
+    listed = {"WavePacketSystem": "Wave packets", "DiffusionSystem": "Diffusion",
+              "PacketNode": "Antisymmetry"}
     for mod, cls in classes:
         key = listed.get(cls, cls)
-        if key not in principles:
+        if not re.search(rf"^\| (\*\*)?`?{re.escape(key)}", principles, re.MULTILINE):
             problems.append(f"{mod}:{cls} is not in PRINCIPLES.md's rule-status table")
     placeholders = re.findall(r"^\| `(\w+)`[^|]*\| \*\*Placeholder", principles, re.MULTILINE)
     notes.append(f"{len(classes)} rule classes listed; placeholders: {', '.join(placeholders) or 'none'}")

@@ -105,13 +105,14 @@ class DiffusionResult:
     series: np.ndarray = field(repr=False)   # per-step walker-mean V
     X: np.ndarray = field(repr=False)        # final walkers
     pair_hist: np.ndarray | None = field(default=None, repr=False)  # (pairs, bins) counts
+    node_kill_rate: float = 0.0  # walkers removed at the node per walker per unit time
 
 
 def run_diffusion(system: DiffusionSystem, tau: float, t_equil: float, t_measure: float,
                   n_target: int = 2000, seed: int = 0, block_time: float = 2.0,
                   control_time: float = 1.0, max_copies: int = 4,
                   X0: np.ndarray | None = None, hist_edges: np.ndarray | None = None,
-                  hist_time: float = 1.0) -> DiffusionResult:
+                  hist_time: float = 1.0, node=None, remove_com: bool = False) -> DiffusionResult:
     """Run the two rules for t_equil + t_measure (atomic time units).
 
     `control_time` is how quickly E_ref pulls the population back to n_target;
@@ -119,12 +120,36 @@ def run_diffusion(system: DiffusionSystem, tau: float, t_equil: float, t_measure
     it should vanish as τ → 0). If `hist_edges` is given, every pair's
     distance is histogrammed every `hist_time` during the measurement (an
     observation only; walkers are distributed as ψ₀, not |ψ₀|²).
+
+    `remove_com` keeps every walker's centre of mass at the origin. This is
+    exact: V does not depend on it and its kinetic energy separates.
+
+    `node` (an `antisymmetry.PacketNode`) applies the antisymmetry rule as a
+    fixed node: each walker keeps the sign of the region it started in and is
+    removed when it crosses the node; a walker that stays on its side is
+    weighted by 1 − exp(−2 d_old d_new / τ), the chance it did not cross and
+    return within the step (mass-weighted coordinates). With a
+    node, V averaged over the walkers is no longer the energy (the node
+    boundary adds a term), so use the growth estimator `growth`.
     """
     rng = np.random.default_rng(seed)
     X = random_walkers(system, n_target, rng) if X0 is None else X0.copy()
+    m = system.mass[None, :, None]
+
+    def centre(X):
+        return X - (m * X).sum(1, keepdims=True) / m.sum() if remove_com else X
+
+    X = centre(X)
+    use_node = node is not None and node.active
+    if use_node:
+        label, dist = node.evaluate(X)
+        keep = label != 0
+        X, label, dist = X[keep], label[keep], dist[keep]
     sigma = np.sqrt(tau / system.mass)[None, :, None]
     V = system.potential(X)
     e_ref = float(V.mean())
+    killed_total = 0.0
+    walker_steps = 0
     n_equil = int(round(t_equil / tau))
     n_meas = int(round(t_measure / tau))
     series = np.empty(n_meas)
@@ -135,9 +160,21 @@ def run_diffusion(system: DiffusionSystem, tau: float, t_equil: float, t_measure
     hist = None if hist_edges is None else np.zeros((len(system._i), len(hist_edges) - 1))
 
     for step in range(n_equil + n_meas):
-        X = X + sigma * rng.normal(size=X.shape)
+        X = centre(X + sigma * rng.normal(size=X.shape))
         V_new = system.potential(X)
         w = np.exp(-tau * (0.5 * (V + V_new) - e_ref))
+        kill_frac = 0.0
+        if use_node:
+            sgn, d_new = node.evaluate(X)
+            # survive only if still on its own side, and weighted by the chance
+            # of not having crossed and come back within the step
+            survive = np.where(sgn == label, 1.0 - np.exp(-2 * dist * d_new / tau), 0.0)
+            w *= survive
+            dist = d_new
+            kill_frac = float(1.0 - survive.mean())
+            if step >= n_equil:
+                killed_total += float((1.0 - survive).sum())
+                walker_steps += len(w)
         copies = (w + rng.uniform(size=w.shape)).astype(int)
         over = copies > max_copies
         capped += int(over.sum())
@@ -145,10 +182,15 @@ def run_diffusion(system: DiffusionSystem, tau: float, t_equil: float, t_measure
         copies[over] = max_copies
         X = np.repeat(X, copies, axis=0)
         V = np.repeat(V_new, copies)
+        if use_node:
+            label = np.repeat(label, copies)
+            dist = np.repeat(dist, copies)
         if len(V) == 0:
             raise RuntimeError("population died out; lower tau or raise n_target")
         v_mean = float(V.mean())
-        e_ref = v_mean - np.log(len(V) / n_target) / control_time
+        # walkers lost at the node are replaced by raising E_ref by that loss rate
+        e_ref = v_mean - np.log((1 - kill_frac) if kill_frac < 1 else 1e-300) / tau \
+            - np.log(len(V) / n_target) / control_time
         k = step - n_equil
         if k >= 0:
             series[k] = v_mean
@@ -170,7 +212,8 @@ def run_diffusion(system: DiffusionSystem, tau: float, t_equil: float, t_measure
     e, err = block_mean(series, counts)
     g, gerr = block_mean(refs, np.ones_like(refs))
     return DiffusionResult(tau, e, err, g, gerr, float(counts.mean()),
-                           capped / max(branched, 1), series, X, hist)
+                           capped / max(branched, 1), series, X, hist,
+                           killed_total / max(walker_steps, 1) / tau)
 
 
 def extrapolate(taus: np.ndarray, energies: np.ndarray, errors: np.ndarray) -> tuple[float, float, float]:
