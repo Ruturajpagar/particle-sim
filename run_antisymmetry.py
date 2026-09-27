@@ -19,10 +19,16 @@ Stated before running:
   * He⁺ and Li⁺ need no node; they are run with the same code to give
     ionization energies from the simulation's own numbers.
 
-Numerical settings: τ ∈ τ₀ × {2, 1, 0.5} / coupling², extrapolated linearly;
-2000 walkers; 4 independent chunks per point; centre of mass removed (exact).
+Walkers are guided (emergent/guide.py) by the same packet wave plus the
+exact pair cusp factors. For a fixed node the guide cannot change the
+energy, only the noise; unguided walkers were too noisy for Li and Be
+(results/antisymmetry/FINDINGS.md).
 
-    python run_antisymmetry.py      # ~100 min on 4 cores
+Numerical settings: τ ∈ τ₀ × {4, 2, 1} / coupling², extrapolated linearly;
+1000 walkers with the population-control correction; 4 independent chunks
+per point; centre of mass removed (exact).
+
+    python run_antisymmetry.py      # ~80 min on 4 cores
 """
 from __future__ import annotations
 
@@ -41,8 +47,8 @@ from multiprocessing import get_context  # noqa: E402
 import numpy as np  # noqa: E402
 
 from emergent import Species  # noqa: E402
-from emergent.antisymmetry import PacketNode  # noqa: E402
-from emergent.diffusion import DiffusionSystem, extrapolate, run_diffusion  # noqa: E402
+from emergent.diffusion import DiffusionSystem, extrapolate  # noqa: E402
+from emergent.guide import PacketGuide, run_guided  # noqa: E402
 from emergent.wavepacket import WavePacketSystem, ground_state  # noqa: E402
 
 OUT = "results/antisymmetry"
@@ -54,17 +60,17 @@ LI7 = Species("Li-7", 12786.39, +3.0)
 BE9 = Species("Be-9", 16424.2, +4.0)
 
 TAU0 = 0.01
-N_TARGET = 2000
+N_TARGET = 1000
 CHUNKS = 4
 # name: (species, kinds, spins, t_equil, t_measure per chunk)
 SYSTEMS = {
-    "He+":              ([HE4, E], [0, 1], [0, +1], 10, 200),
-    "He parallel spins": ([HE4, E], [0, 1, 1], [0, +1, +1], 10, 240),
-    "Li+":              ([LI7, E], [0, 1, 1], [+1, +1, -1], 10, 300),
-    "Li":               ([LI7, E], [0, 1, 1, 1], [+1, +1, -1, +1], 30, 300),
-    "Be":               ([BE9, E], [0, 1, 1, 1, 1], [+1, +1, -1, +1, -1], 20, 60),
+    "He+":              ([HE4, E], [0, 1], [0, +1], 10, 150),
+    "He parallel spins": ([HE4, E], [0, 1, 1], [0, +1, +1], 20, 200),
+    "Li+":              ([LI7, E], [0, 1, 1], [+1, +1, -1], 20, 200),
+    "Li":               ([LI7, E], [0, 1, 1, 1], [+1, +1, -1, +1], 30, 200),
+    "Be":               ([BE9, E], [0, 1, 1, 1, 1], [+1, +1, -1, +1, -1], 30, 100),
 }
-FACTORS = (2, 1, 0.5)
+FACTORS = (4, 2, 1)
 # Exact non-relativistic energies (Hartree). Where only the infinite-mass
 # value is published, it is scaled by the reduced-mass factor (normal mass
 # shift only; the remaining specific mass shift is ≲ 1e-4 Hartree).
@@ -94,7 +100,7 @@ def packet_node(name: str):
         sp, kinds, spins = SYSTEMS[name][:3]
         wp = WavePacketSystem(sp, kinds, spins)
         e, x, hits, capped, _ = ground_state(wp, n_starts=16, seed=11)
-        _nodes[name] = (PacketNode(wp, x), e, hits, x)
+        _nodes[name] = (PacketGuide(wp, x), e, hits, x)
     return _nodes[name]
 
 
@@ -102,16 +108,14 @@ def chunk(job):
     name, factor, seed = job
     sp, kinds, spins, t_eq, t_meas = SYSTEMS[name]
     sys_ = DiffusionSystem(sp, kinds, spins)
-    node, e_wp, _, _ = packet_node(name)
+    guide, e_wp, _, _ = packet_node(name)
     tau = TAU0 * factor / sys_.coupling ** 2
     t0 = time.perf_counter()
-    r = run_diffusion(sys_, tau, t_eq, t_meas, n_target=N_TARGET, seed=seed,
-                      node=node, remove_com=True)
-    half = len(r.series) // 2
+    r = run_guided(sys_, guide, tau, t_eq, t_meas, n_target=N_TARGET, seed=seed)
     return {"system": name, "tau_factor": factor, "tau": tau, "seed": seed,
-            "E": r.energy_pc, "err": r.error_pc, "E_uncorrected": r.growth,
-            "walkers": round(r.walkers_mean, 1), "node_kill_rate": r.node_kill_rate,
-            "capped_fraction": r.capped_fraction, "has_node": node.active,
+            "E": r.energy, "err": r.error, "E_uncorrected": r.energy_raw,
+            "walkers": round(r.walkers_mean, 1), "acceptance": round(r.acceptance, 4),
+            "capped_fraction": r.capped_fraction, "has_node": guide.has_node,
             "wall_s": round(time.perf_counter() - t0, 1)}
 
 
@@ -131,7 +135,8 @@ def main() -> None:
     for n in names:
         node, e_wp, hits, x = packet_node(n)
         R, s = WavePacketSystem(*SYSTEMS[n][:3]).unpack(x)
-        packets[n] = {"E_packets": e_wp, "hits_of_16": hits, "node_groups": len(node.groups),
+        packets[n] = {"E_packets": e_wp, "hits_of_16": hits,
+                      "node_groups": sum(len(g) > 1 for g in node.groups),
                       "centres": np.round(R - R[0], 4).tolist(), "widths": np.round(s, 4).tolist()}
         print(f"packet node for {n}: E = {e_wp:.5f}, {hits}/16 starts, widths {np.round(s, 3)}", flush=True)
 
@@ -145,7 +150,7 @@ def main() -> None:
         for row in pool.imap_unordered(chunk, jobs):
             rows.append(row)
             print(f"[{len(rows)}/{len(jobs)}] {row['system']} τ={row['tau']:.5f} seed {row['seed']}: "
-                  f"E = {row['E']:.5f} ± {row['err']:.5f} (node loss {row['node_kill_rate']:.3f}/a.u., "
+                  f"E = {row['E']:.5f} ± {row['err']:.5f} (acceptance {row['acceptance']:.3f}, "
                   f"{row['wall_s']} s)", flush=True)
     rows.sort(key=lambda r: (list(SYSTEMS).index(r["system"]), -r["tau_factor"], r["seed"]))
     with open(f"{OUT}/chunks.csv", "w", newline="") as f:

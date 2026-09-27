@@ -38,7 +38,7 @@ PKG = ROOT / "emergent"
 # Modules that define physics or produce states. Observers (diagnostics, export)
 # and the experiment runner may name structures: they only measure.
 RULE_MODULES = ["state.py", "interactions.py", "forces.py", "integrators.py", "boundaries.py",
-                "phasespace.py", "groundstate.py", "wavepacket.py", "diffusion.py", "antisymmetry.py"]
+                "phasespace.py", "groundstate.py", "wavepacket.py", "diffusion.py", "antisymmetry.py", "guide.py"]
 # sim.py runs the loop and also logs observations (bound-pair counts etc.);
 # only its dynamics method is held to the rule-code standard.
 LOOP_MODULE, LOOP_METHOD = "sim.py", "run"
@@ -140,13 +140,14 @@ def check_starts(problems: list[str], notes: list[str]) -> None:
         if re.search(r"\bX0\s*=", text):
             problems.append(f"{script.name} hands the diffusion a prepared start (X0)")
         # ground_state / find_ground_state draw every start at random (checked below)
-        if re.search(r"random_start|random_state|ground_state\(|run_diffusion\(|rng\.(uniform|normal)|"
+        if re.search(r"random_start|random_state|ground_state\(|run_diffusion\(|run_guided\(|rng\.(uniform|normal)|"
                      r"init\s*=\s*['\"]random", text):
             random_scripts.append(script.name)
         else:
             problems.append(f"{script.name}: no random start found")
     for mod, fn in (("wavepacket.py", "ground_state"), ("groundstate.py", "find_ground_state"),
-                    ("diffusion.py", "random_walkers"), ("diffusion.py", "run_diffusion")):
+                    ("diffusion.py", "random_walkers"), ("diffusion.py", "run_diffusion"),
+                    ("guide.py", "run_guided")):
         path = PKG / mod
         if path.exists():
             for node in ast.parse(path.read_text()).body:

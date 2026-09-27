@@ -58,8 +58,13 @@ class PacketNode:
     def _matrix(Xg: np.ndarray, centres: np.ndarray, alphas: np.ndarray):
         # M[w, a, b] = exp(−α_a |x_b − R_a|²): packet a evaluated at particle b
         diff = Xg[:, None, :, :] - centres[None, :, None, :]           # (W, a, b, 3)
-        M = np.exp(-alphas[None, :, None] * (diff ** 2).sum(-1))
-        dM = -2 * alphas[None, :, None, None] * diff * M[..., None]   # ∂M[a,b]/∂x_b
+        expo = -alphas[None, :, None] * (diff ** 2).sum(-1)
+        # rescale by the largest value per column, then per row: far from all
+        # packets the raw values underflow to 0, which would read as a node.
+        # Sign and |D|/|∇D| are unchanged by this rescaling.
+        expo = expo - expo.max(1, keepdims=True)
+        M = np.exp(expo - expo.max(2, keepdims=True))       # then per row, likewise
+        dM = -2 * alphas[None, :, None, None] * diff * M[..., None]   # ∂M[a,b]/∂x_b at fixed scale
         return M, dM
 
     @staticmethod

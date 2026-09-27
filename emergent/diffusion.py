@@ -226,28 +226,41 @@ def run_diffusion(system: DiffusionSystem, tau: float, t_equil: float, t_measure
                 for p in range(r.shape[1]):
                     hist[p] += np.histogram(r[:, p], bins=hist_edges)[0]
 
-    def block_mean(x: np.ndarray, wts: np.ndarray) -> tuple[float, float]:
-        per = max(1, int(round(block_time / tau)))
-        nb = len(x) // per
-        if nb < 2:                      # too short for a block error
-            return float(np.average(x, weights=wts)), float("nan")
-        xb = (x[: nb * per] * wts[: nb * per]).reshape(nb, per).sum(1) / wts[: nb * per].reshape(nb, per).sum(1)
-        return float(np.average(x, weights=wts)), float(xb.std(ddof=1) / np.sqrt(nb))
-
-    # population-control correction over a trailing window of L steps
-    L = max(1, int(round(pc_window / tau)))
-    logf = -tau * (applied - applied[n_equil:].mean())
-    csum = np.concatenate([[0.0], np.cumsum(logf)])
-    idx = np.arange(n_equil, n_total)
-    logW = csum[idx + 1] - csum[np.maximum(idx + 1 - L, 0)]
-    Wt = np.exp(logW - logW.max()) * sizes[n_equil:]
-    e_pc, err_pc = block_mean(local[n_equil:], Wt)
+    per = max(1, int(round(block_time / tau)))
+    block_mean = lambda x, wts: _block_mean(x, wts, per)
+    e_pc, err_pc = pc_estimate(applied, local, sizes, n_equil, tau, pc_window, per)
 
     e, err = block_mean(series, counts)
     g, gerr = block_mean(refs, np.ones_like(refs))
     return DiffusionResult(tau, e, err, g, gerr, float(counts.mean()),
                            capped / max(branched, 1), series, X, hist,
                            killed_total / max(walker_steps, 1) / tau, e_pc, err_pc)
+
+
+def _block_mean(x: np.ndarray, wts: np.ndarray, per: int) -> tuple[float, float]:
+    """Weighted mean and its standard error from blocks of `per` steps."""
+    nb = len(x) // per
+    if nb < 2:                      # too short for a block error
+        return float(np.average(x, weights=wts)), float("nan")
+    xb = (x[: nb * per] * wts[: nb * per]).reshape(nb, per).sum(1) / wts[: nb * per].reshape(nb, per).sum(1)
+    return float(np.average(x, weights=wts)), float(xb.std(ddof=1) / np.sqrt(nb))
+
+
+def pc_estimate(applied: np.ndarray, local: np.ndarray, sizes: np.ndarray, n_equil: int,
+                tau: float, window: float, per: int) -> tuple[float, float]:
+    """Energy with the population-control feedback undone.
+
+    `applied[t]` is the E_ref used in step t's weights, `local[t]` the energy
+    estimate after step t and `sizes[t]` the walker count. Each measured step
+    is weighted by the product of exp(−τ(E_ref − const)) over the preceding
+    `window` time (Umrigar, Nightingale & Runge 1993).
+    """
+    L = max(1, int(round(window / tau)))
+    logf = -tau * (applied - applied[n_equil:].mean())
+    csum = np.concatenate([[0.0], np.cumsum(logf)])
+    idx = np.arange(n_equil, len(applied))
+    logW = csum[idx + 1] - csum[np.maximum(idx + 1 - L, 0)]
+    return _block_mean(local[n_equil:], np.exp(logW - logW.max()) * sizes[n_equil:], per)
 
 
 def extrapolate(taus: np.ndarray, energies: np.ndarray, errors: np.ndarray) -> tuple[float, float, float]:
