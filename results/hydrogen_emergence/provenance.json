@@ -1,0 +1,15 @@
+{
+  "git_commit": "7054d5bb69c75a996e7ee45deb81eecb9f62b96d",
+  "gamma": 0.3,
+  "dt": 0.002,
+  "t_end": 150.0,
+  "proton_mass": 1836.15267,
+  "stability": {
+    "alpha": 10.0,
+    "r_min": 1.0133055384207452,
+    "r_max": 1.090685007363148,
+    "E_kicked": -0.47514371453863924,
+    "rel_energy_drift": 2.6019261356993213e-12
+  },
+  "wall_s": 318.5
+}

@@ -79,19 +79,28 @@ def run_case(args):
     q, p, r0, e0 = random_start(seed)
     t0 = time.perf_counter()
     times, rs, es, us = [], [], [], []
-    t, collapsed_at, chunk = 0.0, None, 500
+    # Friction can only remove energy, so any rise means the integrator has
+    # broken down (a close pass it cannot resolve). Check often enough to see it.
+    chunk = 500 if alpha else 20
+    t, collapsed_at, breakdown, e_prev, r_min = 0.0, None, None, np.inf, np.inf
     while t < t_end - 1e-9:
         tr = integrate(sys_, q, p, dt, chunk, gamma=GAMMA, record_every=chunk)
         q, p = tr.q[-1], tr.p[-1]
         t += chunk * dt
         r, pr = pair_state(q, p)
         e = relative_energy(sys_, q, p)
+        r_min = min(r_min, r)
         times.append(t); rs.append(r); es.append(e); us.append(r * pr)
-        if r < 1e-2 or not np.isfinite(e):
+        if not np.isfinite(e) or e > e_prev + 1e-6 * max(1.0, abs(e_prev)):
+            breakdown = t
+            break
+        if r < 1e-2:
             collapsed_at = t
             break
+        e_prev = e
     return {"label": label, "alpha": alpha or 0.0, "seed": seed, "dt": dt,
-            "r0": r0, "E0": e0, "collapsed_at": collapsed_at,
+            "r0": r0, "E0": e0, "collapsed_at": collapsed_at, "breakdown_at": breakdown,
+            "r_min_seen": r_min, "E_last_good": e_prev if np.isfinite(e_prev) else es[-1],
             "E_final": es[-1], "r_final": rs[-1], "rp_final": us[-1],
             "t_final": t, "wall_s": round(time.perf_counter() - t0, 1),
             "series": {"t": times, "r": rs, "E": es, "rp": us}}
@@ -117,6 +126,55 @@ def settle(alpha, seed, t_end=T_END):
     q, p, _, _ = random_start(seed)
     tr = integrate(sys_, q, p, DT, int(t_end / DT), gamma=GAMMA, record_every=int(t_end / DT))
     return tr.q[-1], tr.p[-1]
+
+
+def make_figure(results: list[dict], alphas: list[float], path: str) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(2, 2, figsize=(13, 9))
+    col = {2.0: "C0", 5.0: "C1", 10.0: "C2", 20.0: "C3"}
+    for r in results:
+        s = r["series"]
+        if r["label"] == "coulomb_only":
+            n = len(s["t"]) - (1 if r["breakdown_at"] else 0)   # drop the broken frame
+            ax[0, 0].plot(s["t"][:n], s["r"][:n], color="k", lw=1, alpha=0.8)
+            ax[0, 1].plot(s["t"][:n], s["E"][:n], color="k", lw=1, alpha=0.8)
+        elif r["label"] == "uncertainty":
+            c = col[r["alpha"]]
+            ax[0, 0].plot(s["t"], s["r"], color=c, lw=0.8, alpha=0.6)
+            ax[0, 1].plot(s["t"], s["E"], color=c, lw=0.8, alpha=0.6)
+            ax[1, 1].plot(s["t"], s["rp"], color=c, lw=0.8, alpha=0.6)
+    for a in alphas:
+        ax[0, 0].plot([], [], color=col[a], label=f"Coulomb + uncertainty, α = {a:g}")
+    ax[0, 0].plot([], [], color="k", label="Coulomb only (until numerics break)")
+    ax[0, 0].axhline(REAL_R, color="grey", ls="--", lw=1)
+    ax[0, 0].set(yscale="log", xlabel="time (a.u.)", ylabel="proton–electron distance (a0)",
+                 title="Pair distance: collapse vs settling")
+    ax[0, 0].legend(fontsize=8)
+    ax[0, 1].axhline(REAL_E, color="grey", ls="--", lw=1, label="real hydrogen −0.4997")
+    ax[0, 1].set(ylim=(-1.6, 0.1), xlabel="time (a.u.)", ylabel="pair energy (Hartree)",
+                 title="Energy (Coulomb-only runs fall below the plot)")
+    ax[0, 1].legend(fontsize=8)
+
+    inv = np.linspace(0, 0.55, 100)
+    ax[1, 0].plot(inv, -MU / (2 + inv), color="0.5", lw=1, label="analytic minimum −μ/(2 + 1/α)")
+    for a in alphas:
+        E = [r["E_final"] for r in results if r["label"] == "uncertainty" and r["alpha"] == a]
+        ax[1, 0].plot(np.full(len(E), 1 / a), E, "o", color=col[a], ms=5)
+    ax[1, 0].plot([0], [REAL_E], "k*", ms=12, label="real hydrogen (α → ∞ limit)")
+    ax[1, 0].set(xlabel="1 / α (wall softness)", ylabel="settled energy (Hartree)",
+                 title="Settled energy of 8 random starts per α")
+    ax[1, 0].legend(fontsize=8)
+    ax[1, 1].axhline(1.0, color="grey", ls="--", lw=1)
+    ax[1, 1].set(ylim=(0, 3), xlabel="time (a.u.)", ylabel="r · p  (units of ħ)",
+                 title="Phase-space product settles at exactly ħ")
+    fig.suptitle("Hydrogen from fundamental rules: 1 proton + 1 electron, atomic units, "
+                 "no atom-specific rule", fontsize=12)
+    fig.tight_layout()
+    fig.savefig(path, dpi=105)
+    plt.close(fig)
 
 
 def main() -> None:
@@ -149,8 +207,11 @@ def main() -> None:
     print("\n=== A: Coulomb only ===")
     for r in rows:
         if r["label"] == "coulomb_only":
-            print(f"  seed {r['seed']}: collapsed at t = {r['collapsed_at']}, "
-                  f"last r = {r['r_final']:.2e}, last E = {r['E_final']:.3g}")
+            why = (f"reached r < 0.01 a0 at t = {r['collapsed_at']:.2f}" if r["collapsed_at"]
+                   else f"integrator broke down (energy rose) at t = {r['breakdown_at']:.2f}"
+                   if r["breakdown_at"] else "no collapse seen")
+            print(f"  seed {r['seed']}: {why}; smallest r seen {r['r_min_seen']:.3g} a0, "
+                  f"last trustworthy E = {r['E_last_good']:.3g} Hartree")
     print("\n=== B: Coulomb + uncertainty (ξ = 1) ===")
     print(f"  {'α':>4} | {'E final (Hartree)':>22} {'analytic':>9} | {'r final (a0)':>17} {'analytic':>8} | r·p")
     for a in alphas:
@@ -168,6 +229,7 @@ def main() -> None:
     print("\n=== C: stability after a 10% kick, no friction, 100 a.u. ===")
     print(f"  r stays in [{stab['r_min']:.3f}, {stab['r_max']:.3f}] a0, "
           f"relative energy drift {stab['rel_energy_drift']:.1e}")
+    make_figure(results, alphas, f"{OUT}/hydrogen.png")
     print(f"\n{len(jobs)} runs in {time.perf_counter() - t0:.0f} s -> {OUT}/")
 
 
