@@ -1,0 +1,501 @@
+<title>Emergence Chamber</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#060910; --panel:#0c1220e6; --line:#1c2940; --ink:#dfe6f2; --dim:#8593ab; --faint:#4d5a72;
+  --accent:#6fd3ff; --warm:#ffb46b; --good:#7fe0a6; --warn:#ffcf6b; --bad:#ff7a7a;
+  --display:"Chakra Petch","Segoe UI",system-ui,sans-serif;
+  --body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font:13px/1.45 var(--body);overflow:hidden}
+#app{display:grid;grid-template-columns:290px 1fr 300px;height:100%;min-height:0}
+aside{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:14px 14px 40px;display:flex;flex-direction:column;gap:14px;min-height:0}
+aside.right{border-right:0;border-left:1px solid var(--line)}
+#stage{position:relative;min-width:0;min-height:0}
+canvas{display:block;width:100%;height:100%;cursor:grab}
+canvas:active{cursor:grabbing}
+h1{font:600 18px/1.1 var(--display);letter-spacing:.04em;margin:0}
+h1 small{display:block;font:400 11px/1.4 var(--body);color:var(--dim);letter-spacing:0;margin-top:4px}
+details{border-top:1px solid var(--line);padding-top:10px}
+summary{font:600 11px var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--accent);cursor:pointer;list-style:none;display:flex;justify-content:space-between}
+summary::after{content:"+";color:var(--faint)}
+details[open] summary::after{content:"–"}
+.ctl{display:grid;grid-template-columns:1fr auto;gap:2px 8px;margin-top:9px;align-items:center}
+.ctl label{color:var(--dim);font-size:12px}
+.ctl output{font:12px var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.ctl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+button,select{font:500 12px var(--body);color:var(--ink);background:#15203a;border:1px solid #273858;border-radius:6px;padding:6px 9px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:#04121c;border-color:var(--accent)}
+.chk{display:flex;align-items:center;gap:7px;margin-top:7px;color:var(--dim);font-size:12px}
+.chk input{accent-color:var(--accent)}
+.note{color:var(--faint);font-size:11px;margin:6px 0 0}
+.tag{font:500 10px var(--mono);padding:1px 5px;border-radius:4px;border:1px solid currentColor;margin-left:4px}
+.tag.warn{color:var(--warn)} .tag.ok{color:var(--good)}
+#hud{position:absolute;left:14px;top:12px;font:12px var(--mono);color:var(--dim);pointer-events:none;display:grid;gap:2px;font-variant-numeric:tabular-nums}
+#hud b{color:var(--ink);font-weight:500}
+#toast{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);background:#0c1220f0;border:1px solid var(--line);padding:7px 12px;border-radius:8px;font-size:12px;opacity:0;transition:opacity .3s}
+.stat{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.stat div{background:#0f182b;border:1px solid var(--line);border-radius:8px;padding:8px}
+.stat span{display:block;color:var(--dim);font-size:11px}
+.stat b{font:500 16px var(--mono);font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+td{padding:4px 2px;border-bottom:1px solid #141e33}
+td.f{font:500 14px var(--mono)}
+td.n{color:var(--dim);font-size:11px}
+td.c{text-align:right;font:12px var(--mono)}
+.sw{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+#chart{width:100%;height:130px;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:var(--dim);margin-top:4px}
+@media (max-width:900px){
+  body{overflow:auto}
+  #app{grid-template-columns:1fr;grid-template-rows:62vh auto auto;height:auto}
+  #stage{order:-1;height:62vh}
+  aside{border:0;border-top:1px solid var(--line);padding-inline:16px}
+}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+</style>
+
+<div id="app">
+<aside>
+  <h1>Emergence Chamber<small>Fundamental particles only. Atoms and molecules are never described in the rules; they form, or they don't.</small></h1>
+
+  <details open><summary>Run</summary>
+    <div class="row">
+      <button id="play" class="primary">Pause</button>
+      <button id="step">Step</button>
+      <button id="reset">Restart preset</button>
+    </div>
+    <div class="ctl"><label for="speed">Simulation speed</label><output id="speedO"></output><input id="speed" type="range" min="1" max="40" value="12"></div>
+    <label class="chk"><input type="checkbox" id="persist" checked> Keep running state across reloads</label>
+  </details>
+
+  <details open><summary>Starting mix</summary>
+    <div class="ctl"><label for="preset">Preset (particle counts only)</label><span></span>
+      <select id="preset" style="grid-column:1/-1">
+        <option value="h">Hydrogen soup: protons + electrons</option>
+        <option value="water">Water ingredients: 2 p : 1 O-nucleus + electrons</option>
+        <option value="ch">Carbon + hydrogen nuclei + electrons</option>
+        <option value="nh">Nitrogen + hydrogen nuclei + electrons</option>
+        <option value="he">Helium nuclei + electrons</option>
+        <option value="li">Lithium nuclei + electrons</option>
+        <option value="ps">Positronium: electrons + positrons</option>
+        <option value="plasma">Hot plasma (mixed, 30,000 K)</option>
+        <option value="empty">Empty chamber</option>
+      </select></div>
+    <p class="note">Every particle starts at a random point with a random thermal velocity. Nothing is placed near anything.</p>
+  </details>
+
+  <details open><summary>Add particles</summary>
+    <div class="ctl"><label for="kind">Particle</label><span></span><select id="kind" style="grid-column:1/-1"></select></div>
+    <div class="ctl"><label for="count">How many</label><output id="countO"></output><input id="count" type="range" min="1" max="40" value="6"></div>
+    <div class="row"><button id="add">Add at random</button><button id="addE">+ matching electrons</button><button id="clear">Remove this kind</button></div>
+    <p class="note">Nuclei heavier than a proton are supplied as whole particles, since the strong force that builds them is not in the rules.</p>
+  </details>
+
+  <details open><summary>Environment</summary>
+    <div class="ctl"><label for="temp">Temperature</label><output id="tempO"></output><input id="temp" type="range" min="0" max="100" value="30"></div>
+    <div class="ctl"><label for="gamma">Coupling to surroundings</label><output id="gammaO"></output><input id="gamma" type="range" min="0" max="100" value="35"></div>
+    <p class="note">How fast the chamber takes up or gives energy (stands in for radiated light). 0 = sealed, energy conserved.</p>
+    <div class="ctl"><label for="box">Chamber size</label><output id="boxO"></output><input id="box" type="range" min="12" max="80" value="30"></div>
+    <div class="ctl"><label for="efield">Electric field (x)</label><output id="efieldO"></output><input id="efield" type="range" min="-100" max="100" value="0"></div>
+    <div class="ctl"><label for="bfield">Magnetic field (z)</label><output id="bfieldO"></output><input id="bfield" type="range" min="-100" max="100" value="0"></div>
+    <div class="row"><button id="heat">Heat pulse</button><button id="quench">Quench (deep cool)</button><button id="squeeze">Compress</button></div>
+  </details>
+
+  <details><summary>Fundamental rules</summary>
+    <label class="chk"><input type="checkbox" id="rCoul" checked> Coulomb force between charges</label>
+    <label class="chk"><input type="checkbox" id="rUnc" checked> Uncertainty: r·p ≥ ξħ for every pair</label>
+    <label class="chk"><input type="checkbox" id="rPauli" checked> Pauli: identical same-spin fermions</label>
+    <div class="ctl"><label for="xi">Uncertainty ξ <span class="tag ok">fixed a priori</span></label><output id="xiO"></output><input id="xi" type="range" min="50" max="200" value="100"></div>
+    <div class="ctl"><label for="xip">Pauli strength ξ<sub>P</sub> <span class="tag warn">not universal</span></label><output id="xipO"></output><input id="xip" type="range" min="100" max="600" value="277"></div>
+    <div class="ctl"><label for="alpha">Wall stiffness α (numerical)</label><output id="alphaO"></output><input id="alpha" type="range" min="2" max="10" value="5"></div>
+    <p class="note">Turn uncertainty off and watch electrons fall into nuclei: that collapse is why quantum rules are needed.</p>
+  </details>
+
+  <details><summary>View</summary>
+    <label class="chk"><input type="checkbox" id="vClouds" checked> Electron clouds</label>
+    <label class="chk"><input type="checkbox" id="vBonds" checked> Bonds (shared electrons)</label>
+    <label class="chk"><input type="checkbox" id="vLabels" checked> Labels for what formed</label>
+    <label class="chk"><input type="checkbox" id="vTrails"> Trails</label>
+    <label class="chk"><input type="checkbox" id="vSpin"> Show spin (↑ warm / ↓ cool)</label>
+    <label class="chk"><input type="checkbox" id="vRotate" checked> Slow auto-rotate</label>
+    <label class="chk"><input type="checkbox" id="vBox" checked> Chamber walls</label>
+    <p class="note">Drag to rotate, scroll or pinch to zoom.</p>
+  </details>
+
+  <details><summary>What is and isn't in here</summary>
+    <p class="note" style="color:var(--dim)">In: Coulomb, the uncertainty principle (as a pair rule), spin and Pauli exclusion, a heat bath. Constants: ħ, masses, charges, spins, in atomic units.</p>
+    <p class="note" style="color:var(--dim)">Not in: strong and weak forces (nuclei are given), relativity, photons (the bath stands in), gravity.</p>
+    <p class="note" style="color:var(--dim)">This live engine uses the fast quasi-classical rules (Phase 2) so hundreds of particles run in real time. They form atoms and molecules from free particles but overbind molecules. The exact quantum engine (Phases 4–5 in the repository) reproduces H through Be within 0.5% but takes an hour per atom.</p>
+    <p class="note" style="color:var(--dim)">Names and bonds shown here are measurements only: they are computed from the particles and never fed back.</p>
+  </details>
+</aside>
+
+<div id="stage">
+  <canvas id="cv" aria-label="Particle simulation"></canvas>
+  <div id="hud"></div>
+  <div id="toast" role="status"></div>
+</div>
+
+<aside class="right">
+  <div class="stat">
+    <div><span>Time</span><b id="sTime">0</b></div>
+    <div><span>Mean kinetic energy</span><b id="sTemp">0</b></div>
+    <div><span>Particles</span><b id="sN">0</b></div>
+    <div><span>Bound fraction</span><b id="sBound">0</b></div>
+  </div>
+  <details open><summary>What has formed</summary>
+    <table><tbody id="tally"></tbody></table>
+    <p class="note">Formula of each bound cluster, read from the particles (nuclei + electrons held together).</p>
+  </details>
+  <details open><summary>Over time</summary>
+    <canvas id="chart"></canvas>
+    <div class="legend" id="legend"></div>
+  </details>
+  <details open><summary>Energy</summary>
+    <div class="stat">
+      <div><span>Total (eV)</span><b id="sE">0</b></div>
+      <div><span>Per particle (eV)</span><b id="sEp">0</b></div>
+    </div>
+  </details>
+</aside>
+</div>
+
+<script>
+"use strict";
+// ---------- units: atomic units (ħ = e = m_e = 1) ----------
+const EV = 27.211386, KELVIN = 315775.02, FS = 0.0241888;
+const MU = 1822.888; // atomic mass unit in electron masses
+// Fundamental particles, and nuclei supplied whole (the strong force is not in the rules).
+const KINDS = [
+  {id:"e-",  name:"electron",   sym:"e⁻", m:1, q:-1, f:true,  col:"#7fb6ff"},
+  {id:"e+",  name:"positron",   sym:"e⁺", m:1, q:+1, f:true,  col:"#ffb46b"},
+  {id:"p",   name:"proton (H nucleus)", sym:"H", m:1836.15267, q:1, f:true, col:"#f4f7ff"},
+  {id:"He",  name:"helium-4 nucleus", sym:"He", m:4.002602*MU-2, q:2, f:false, col:"#7ff0ea"},
+  {id:"Li",  name:"lithium-7 nucleus", sym:"Li", m:7.016003*MU-3, q:3, f:true, col:"#d98cff"},
+  {id:"Be",  name:"beryllium-9 nucleus", sym:"Be", m:9.012183*MU-4, q:4, f:true, col:"#c2ff7a"},
+  {id:"C",   name:"carbon-12 nucleus", sym:"C", m:12*MU-6, q:6, f:false, col:"#9aa4b5"},
+  {id:"N",   name:"nitrogen-14 nucleus", sym:"N", m:14.003074*MU-7, q:7, f:false, col:"#5f86ff"},
+  {id:"O",   name:"oxygen-16 nucleus", sym:"O", m:15.994915*MU-8, q:8, f:false, col:"#ff5d5d"},
+];
+const KI = Object.fromEntries(KINDS.map((k,i)=>[k.id,i]));
+const NAMES = {H:"hydrogen atom",H2:"hydrogen molecule","H2+":"hydrogen molecule ion","H+":"free proton","H-":"hydride ion",He:"helium atom","He+":"helium ion","He2+":"bare helium nucleus",Li:"lithium atom","Li+":"lithium ion",H2O:"water",HO:"hydroxyl","HO-":"hydroxide",CH4:"methane",NH3:"ammonia",CO2:"carbon dioxide",CO:"carbon monoxide",O2:"oxygen molecule",N2:"nitrogen molecule",Ps:"positronium",HLi:"lithium hydride",C:"carbon atom",N:"nitrogen atom",O:"oxygen atom",H3O:"hydronium","H3O+":"hydronium ion",C2H2:"acetylene",C2H4:"ethylene",C2H6:"ethane",HCN:"hydrogen cyanide",N2H4:"hydrazine",H2O2:"hydrogen peroxide",CH2O:"formaldehyde",CH3:"methyl",CH2:"methylene",CH:"methylidyne",NH2:"amino",NH:"imidogen",Be:"beryllium atom","e-":"free electron","e+":"free positron"};
+
+// ---------- state ----------
+let N=0, CAP=0, kind, x, p, spin; // x,p: Float64Array 3N
+const P = { // parameters (atomic units)
+  T:0, gamma:0, L:30, E:0, B:0, xi:1, xip:2.77, alpha:5,
+  coul:true, unc:true, pauli:true, speed:12, running:true };
+let simTime=0;
+
+function ensure(n){ if(n<=CAP) return; const c=Math.max(n,CAP*2,64);
+  const k2=new Int32Array(c), x2=new Float64Array(3*c), p2=new Float64Array(3*c), s2=new Float64Array(c);
+  if(CAP){k2.set(kind.subarray(0,N));x2.set(x.subarray(0,3*N));p2.set(p.subarray(0,3*N));s2.set(spin.subarray(0,N));}
+  kind=k2;x=x2;p=p2;spin=s2;CAP=c; dq=new Float64Array(3*c); dp=new Float64Array(3*c);
+  k1=[new Float64Array(3*c),new Float64Array(3*c)];k2_=[new Float64Array(3*c),new Float64Array(3*c)];
+  k3=[new Float64Array(3*c),new Float64Array(3*c)];k4=[new Float64Array(3*c),new Float64Array(3*c)];
+  xs=new Float64Array(3*c); ps=new Float64Array(3*c); trail=null; }
+let dq,dp,k1,k2_,k3,k4,xs,ps,trail;
+function gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+function addParticle(ki, T){
+  ensure(N+1); const K=KINDS[ki], h=P.L/2*0.92;
+  kind[N]=ki; spin[N]=K.f ? (Math.random()<.5?.5:-.5) : 0;
+  const s=Math.sqrt(K.m*Math.max(T,1e-4));
+  for(let c=0;c<3;c++){x[3*N+c]=(Math.random()*2-1)*h; p[3*N+c]=s*gauss();}
+  N++;
+}
+function removeKind(ki){let j=0;for(let i=0;i<N;i++){if(kind[i]===ki)continue;
+  kind[j]=kind[i];spin[j]=spin[i];for(let c=0;c<3;c++){x[3*j+c]=x[3*i+c];p[3*j+c]=p[3*i+c];}j++;}N=j;trail=null;}
+
+// ---------- the rules: Hamilton's equations ----------
+// H = Σ p²/2m + Σ q_i q_j / r + Σ wall(r, p_rel; ξ) + Σ_same-spin fermions wall(r, p_rel; ξ_P)
+// wall = ξ²ħ²/(4αμr²)·exp(α[1 − (r p_rel/ξħ)⁴])   (Kirschbaum–Wilets form)
+let lastPot=0;
+function derivs(X,Pm,DQ,DP){
+  const n=N, a=P.alpha; let pot=0;
+  for(let i=0;i<n;i++){const m=KINDS[kind[i]].m;
+    DQ[3*i]=Pm[3*i]/m;DQ[3*i+1]=Pm[3*i+1]/m;DQ[3*i+2]=Pm[3*i+2]/m;DP[3*i]=0;DP[3*i+1]=0;DP[3*i+2]=0;}
+  for(let i=0;i<n;i++){const Ki=KINDS[kind[i]], mi=Ki.m, qi=Ki.q;
+    const xi0=X[3*i],xi1=X[3*i+1],xi2=X[3*i+2], pi0=Pm[3*i],pi1=Pm[3*i+1],pi2=Pm[3*i+2];
+    for(let j=i+1;j<n;j++){const Kj=KINDS[kind[j]], mj=Kj.m;
+      const d0=xi0-X[3*j],d1=xi1-X[3*j+1],d2=xi2-X[3*j+2];
+      const s=d0*d0+d1*d1+d2*d2+1e-12, r=Math.sqrt(s);
+      let gx=0; // dV/ds accumulator (force part)
+      if(P.coul && qi && Kj.q){const qq=qi*Kj.q; pot+=qq/r; gx+=-qq/(2*s*r);}
+      // walls
+      const same = P.pauli && Ki.f && kind[i]===kind[j] && spin[i]===spin[j];
+      if(P.unc || same){
+        const M=mi+mj, mu=mi*mj/M;
+        const r0=(mj*pi0-mi*Pm[3*j])/M, r1=(mj*pi1-mi*Pm[3*j+1])/M, r2=(mj*pi2-mi*Pm[3*j+2])/M;
+        const P2=r0*r0+r1*r1+r2*r2;
+        let gp=0;
+        for(let w=0;w<2;w++){
+          const xw = w===0 ? (P.unc?P.xi:0) : (same?P.xip:0); if(!xw) continue;
+          const k4=xw*xw*xw*xw, y=s*s*P2*P2/k4, ex=a*(1-y); if(ex<-40) continue;
+          const C=xw*xw/(4*a*mu), E=Math.exp(ex);
+          pot+=C*E/s; gx+=-C*E/(s*s)-2*a*C*E*P2*P2/k4; gp+=-2*a*C*E*s*P2/k4;
+        }
+        if(gp){const fi=2*gp*mj/M, fj=-2*gp*mi/M;
+          DQ[3*i]+=fi*r0;DQ[3*i+1]+=fi*r1;DQ[3*i+2]+=fi*r2;DQ[3*j]+=fj*r0;DQ[3*j+1]+=fj*r1;DQ[3*j+2]+=fj*r2;}
+      }
+      if(gx){const f=-2*gx; DP[3*i]+=f*d0;DP[3*i+1]+=f*d1;DP[3*i+2]+=f*d2;DP[3*j]-=f*d0;DP[3*j+1]-=f*d1;DP[3*j+2]-=f*d2;}
+    }
+    // external fields (E along x, B along z)
+    if(qi){DP[3*i]+=qi*P.E; if(P.B){const vx=pi0/mi,vy=pi1/mi; DP[3*i]+=qi*vy*P.B; DP[3*i+1]-=qi*vx*P.B;}}
+  }
+  lastPot=pot; return pot;
+}
+function rk4(dt){
+  const n3=3*N;
+  derivs(x,p,k1[0],k1[1]);
+  for(let k=0;k<n3;k++){xs[k]=x[k]+.5*dt*k1[0][k];ps[k]=p[k]+.5*dt*k1[1][k];}
+  derivs(xs,ps,k2_[0],k2_[1]);
+  for(let k=0;k<n3;k++){xs[k]=x[k]+.5*dt*k2_[0][k];ps[k]=p[k]+.5*dt*k2_[1][k];}
+  derivs(xs,ps,k3[0],k3[1]);
+  for(let k=0;k<n3;k++){xs[k]=x[k]+dt*k3[0][k];ps[k]=p[k]+dt*k3[1][k];}
+  derivs(xs,ps,k4[0],k4[1]);
+  for(let k=0;k<n3;k++){x[k]+=dt/6*(k1[0][k]+2*k2_[0][k]+2*k3[0][k]+k4[0][k]);p[k]+=dt/6*(k1[1][k]+2*k2_[1][k]+2*k3[1][k]+k4[1][k]);}
+}
+function step(){
+  if(!N) return 0;
+  // choose dt from the current rates (numerical control only)
+  derivs(x,p,dq,dp); let vmax=1e-9, rmax=1e-9;
+  for(let i=0;i<N;i++){const v=Math.hypot(dq[3*i],dq[3*i+1],dq[3*i+2]); if(v>vmax)vmax=v;
+    const f=Math.hypot(dp[3*i],dp[3*i+1],dp[3*i+2])/(Math.hypot(p[3*i],p[3*i+1],p[3*i+2])+0.3*Math.sqrt(KINDS[kind[i]].m)); if(f>rmax)rmax=f;}
+  const dt=Math.min(0.05, 0.03/vmax, 0.05/rmax);
+  rk4(dt);
+  // environment: Langevin bath at temperature T with coupling γ
+  const g=P.gamma; if(g>0){const c1=Math.exp(-g*dt), c2=Math.sqrt(1-c1*c1);
+    for(let i=0;i<N;i++){const m=KINDS[kind[i]].m, s=Math.sqrt(m*P.T)*c2;
+      for(let c=0;c<3;c++)p[3*i+c]=c1*p[3*i+c]+s*gauss();}}
+  // reflecting chamber walls
+  const h=P.L/2; for(let k=0;k<3*N;k++){if(x[k]>h){x[k]=2*h-x[k];p[k]=-Math.abs(p[k]);}else if(x[k]<-h){x[k]=-2*h-x[k];p[k]=Math.abs(p[k]);}}
+  simTime+=dt; return dt;
+}
+
+// ---------- observer (never feeds back): bound pairs, clusters, formulas ----------
+let clusters=[], bondPairs=[], boundFrac=0, kinT=0, totalE=0;
+function observe(){
+  const n=N, parent=new Int32Array(n); for(let i=0;i<n;i++)parent[i]=i;
+  const find=i=>{while(parent[i]!==i){parent[i]=parent[parent[i]];i=parent[i];}return i;};
+  const bestNuc=new Int32Array(n).fill(-1), bestE=new Float64Array(n).fill(0), bound=new Uint8Array(n);
+  const links=[];
+  for(let i=0;i<n;i++){const Ki=KINDS[kind[i]]; if(Math.abs(Ki.m-1)>1e-9) continue; // light particles (e±)
+    for(let j=0;j<n;j++){if(i===j)continue; const Kj=KINDS[kind[j]]; if(Ki.q*Kj.q>=0)continue;
+      const d0=x[3*i]-x[3*j],d1=x[3*i+1]-x[3*j+1],d2=x[3*i+2]-x[3*j+2], r=Math.hypot(d0,d1,d2); if(r>7)continue;
+      const M=Ki.m+Kj.m, mu=Ki.m*Kj.m/M;
+      const r0=(Kj.m*p[3*i]-Ki.m*p[3*j])/M, r1=(Kj.m*p[3*i+1]-Ki.m*p[3*j+1])/M, r2=(Kj.m*p[3*i+2]-Ki.m*p[3*j+2])/M;
+      const P2=r0*r0+r1*r1+r2*r2; let e=P2/(2*mu)+Ki.q*Kj.q/r;
+      if(P.unc){const k4=P.xi**4, ex=P.alpha*(1-r**4*P2*P2/k4); if(ex>-40)e+=P.xi**2/(4*P.alpha*mu*r*r)*Math.exp(ex);}
+      if(e<0){ links.push([i,j,e]); if(e<bestE[i]){bestE[i]=e;bestNuc[i]=j;} }
+    }}
+  for(const [i,j,e] of links){ if(e<0.35*bestE[i]) continue; // strong enough relative to its best partner
+    parent[find(i)]=find(j); bound[i]=1; bound[j]=1; }
+  // nuclei sharing an electron are bonded
+  const byE={}; bondPairs=[];
+  for(const [i,j,e] of links){ if(e<0.35*bestE[i]) continue; (byE[i]=byE[i]||[]).push(j); }
+  for(const i in byE){const L=byE[i]; for(let a=0;a<L.length;a++)for(let b=a+1;b<L.length;b++)bondPairs.push([L[a],L[b]]);}
+  const groups={}; for(let i=0;i<n;i++){const r=find(i);(groups[r]=groups[r]||[]).push(i);}
+  clusters=[]; let nb=0;
+  for(const r in groups){const g=groups[r]; if(g.length>1)nb+=g.length;
+    clusters.push({members:g, formula:formula(g)});}
+  boundFrac=n?nb/n:0;
+  let ke=0; for(let i=0;i<n;i++){const m=KINDS[kind[i]].m; ke+=(p[3*i]**2+p[3*i+1]**2+p[3*i+2]**2)/(2*m);}
+  kinT=n?2*ke/(3*n):0; totalE=ke+lastPot;
+}
+const SUB="₀₁₂₃₄₅₆₇₈₉", SUP={"+":"⁺","-":"⁻",0:"⁰",1:"¹",2:"²",3:"³",4:"⁴",5:"⁵",6:"⁶",7:"⁷",8:"⁸",9:"⁹"};
+function formula(g){
+  const cnt={}; let ne=0, npos=0, charge=0;
+  for(const i of g){const K=KINDS[kind[i]]; charge+=K.q;
+    if(K.id==="e-")ne++; else if(K.id==="e+")npos++; else cnt[K.sym]=(cnt[K.sym]||0)+1;}
+  const syms=Object.keys(cnt);
+  if(!syms.length){ if(npos&&ne&&g.length===2) return {key:"Ps",txt:"Ps"}; if(g.length===1) return {key:KINDS[kind[g[0]]].id,txt:KINDS[kind[g[0]]].sym};
+    return {key:`e${ne}p${npos}`,txt:`${ne}e⁻${npos}e⁺`}; }
+  const order=syms.sort((a,b)=> (a==="C"?-1:b==="C"?1:0) || (cnt.C&&(a==="H"?-1:b==="H"?1:0)) || a.localeCompare(b));
+  let key="",txt="";
+  for(const s of order){key+=s+(cnt[s]>1?cnt[s]:""); txt+=s+(cnt[s]>1?String(cnt[s]).split("").map(d=>SUB[d]).join(""):"");}
+  if(charge){const a=Math.abs(charge), sg=charge>0?"+":"-"; key+=(a>1?a:"")+sg; txt+=(a>1?String(a).split("").map(d=>SUP[d]).join(""):"")+SUP[sg];}
+  return {key,txt};
+}
+
+// ---------- rendering ----------
+const cv=document.getElementById("cv"), cx=cv.getContext("2d");
+let W=0,H=0,DPR=1, yaw=0.6, pitch=0.35, zoom=1;
+function resize(){DPR=Math.min(2,window.devicePixelRatio||1);const r=cv.getBoundingClientRect();W=r.width;H=r.height;cv.width=W*DPR;cv.height=H*DPR;cx.setTransform(DPR,0,0,DPR,0,0);}
+new ResizeObserver(resize).observe(cv);
+const V={clouds:true,bonds:true,labels:true,trails:false,spin:false,rotate:true,box:true};
+function project(X,Y,Z){
+  const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+  const x1=cy*X+sy*Z, z1=-sy*X+cy*Z, y1=cp*Y-sp*z1, z2=sp*Y+cp*z1;
+  const cam=P.L*1.9, f=Math.min(W,H)*0.95*zoom/(P.L), s=f*cam/(cam+z2);
+  return [W/2+x1*s, H/2-y1*s, s, z2];
+}
+function hexA(h,a){const n=parseInt(h.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`;}
+function draw(){
+  cx.globalCompositeOperation="source-over";
+  const bg=cx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*.7);
+  bg.addColorStop(0,"#0b1222");bg.addColorStop(1,"#04060b");
+  if(V.trails){cx.fillStyle="rgba(5,8,15,0.18)";cx.fillRect(0,0,W,H);} else {cx.fillStyle=bg;cx.fillRect(0,0,W,H);}
+  if(V.box){const h=P.L/2, c=[[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]].map(v=>project(v[0]*h,v[1]*h,v[2]*h));
+    cx.strokeStyle="rgba(111,211,255,0.10)";cx.lineWidth=1;cx.beginPath();
+    for(const [a,b] of [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]]){cx.moveTo(c[a][0],c[a][1]);cx.lineTo(c[b][0],c[b][1]);}
+    cx.stroke();}
+  const pr=new Array(N); for(let i=0;i<N;i++)pr[i]=project(x[3*i],x[3*i+1],x[3*i+2]);
+  const order=[...Array(N).keys()].sort((a,b)=>pr[b][3]-pr[a][3]);
+  const depth=z=>Math.max(.25,Math.min(1,1-(z)/(P.L*1.4)));
+  if(V.bonds){cx.lineCap="round";
+    for(const [a,b] of bondPairs){const A=pr[a],B=pr[b]; if(!A||!B)continue;
+      const g=cx.createLinearGradient(A[0],A[1],B[0],B[1]); g.addColorStop(0,hexA(KINDS[kind[a]].col,.55)); g.addColorStop(1,hexA(KINDS[kind[b]].col,.55));
+      cx.strokeStyle=g; cx.lineWidth=Math.max(1.2,A[2]*0.18); cx.beginPath();cx.moveTo(A[0],A[1]);cx.lineTo(B[0],B[1]);cx.stroke();}}
+  cx.globalCompositeOperation="lighter";
+  for(const i of order){const K=KINDS[kind[i]], [sx,sy,sc,z]=pr[i], d=depth(z);
+    if(K.m<2){ // electrons and positrons: a cloud whose size follows ħ/p (uncertainty length)
+      const pm=Math.hypot(p[3*i],p[3*i+1],p[3*i+2]), len=Math.min(4,Math.max(.35,P.xi/(pm+0.15)));
+      const R=V.clouds?len*sc*.9:3; let col=K.col;
+      if(V.spin&&K.f) col= spin[i]>0?"#ffc27a":"#79b8ff";
+      const g=cx.createRadialGradient(sx,sy,0,sx,sy,R); g.addColorStop(0,hexA(col,.55*d)); g.addColorStop(.35,hexA(col,.22*d)); g.addColorStop(1,hexA(col,0));
+      cx.fillStyle=g; cx.beginPath(); cx.arc(sx,sy,R,0,6.2832); cx.fill();
+      cx.fillStyle=hexA("#ffffff",.8*d); cx.beginPath(); cx.arc(sx,sy,Math.max(1,sc*.06),0,6.2832); cx.fill();
+    } else { // nuclei
+      const R=Math.max(2.5,sc*(0.16+0.03*Math.cbrt(K.m/1836)));
+      const g=cx.createRadialGradient(sx,sy,0,sx,sy,R*3.2); g.addColorStop(0,hexA(K.col,.9*d)); g.addColorStop(.3,hexA(K.col,.35*d)); g.addColorStop(1,hexA(K.col,0));
+      cx.fillStyle=g; cx.beginPath(); cx.arc(sx,sy,R*3.2,0,6.2832); cx.fill();
+      cx.fillStyle=hexA("#ffffff",.95*d); cx.beginPath(); cx.arc(sx,sy,R*.55,0,6.2832); cx.fill();
+    }}
+  cx.globalCompositeOperation="source-over";
+  if(V.labels){cx.font="500 12px 'IBM Plex Mono', monospace"; cx.textAlign="center";
+    for(const c of clusters){ if(c.members.length<2) continue; let X=0,Y=0,m=0;
+      for(const i of c.members){const K=KINDS[kind[i]]; X+=pr[i][0]*K.m; Y+=pr[i][1]*K.m; m+=K.m;}
+      X/=m; Y/=m; const t=c.formula.txt; const w=cx.measureText(t).width+10;
+      cx.fillStyle="rgba(6,10,18,0.72)"; cx.fillRect(X-w/2,Y-28,w,17); cx.fillStyle="#e8f2ff"; cx.fillText(t,X,Y-15);}}
+}
+
+// ---------- stats panel ----------
+const hist=[]; const HIST_MAX=240; const COLORS=["#6fd3ff","#ffb46b","#7fe0a6","#ff7a9c","#c79bff","#ffe27a","#8fb3ff","#ff9d6b"];
+function updatePanels(){
+  document.getElementById("sTime").textContent = (simTime*FS).toFixed(1)+" fs";
+  document.getElementById("sTemp").textContent = (1.5*kinT*EV).toFixed(2)+" eV";
+  document.getElementById("sN").textContent = N;
+  document.getElementById("sBound").textContent = Math.round(boundFrac*100)+"%";
+  document.getElementById("sE").textContent = (totalE*EV).toFixed(1);
+  document.getElementById("sEp").textContent = N?(totalE*EV/N).toFixed(2):"0";
+  const tally={}; for(const c of clusters){const k=c.formula.key; (tally[k]=tally[k]||{txt:c.formula.txt,n:0,size:c.members.length}).n++;}
+  const rows=Object.entries(tally).sort((a,b)=>(b[1].size>1)-(a[1].size>1)||b[1].n-a[1].n).slice(0,14);
+  document.getElementById("tally").innerHTML = rows.map(([k,v])=>{
+    const nm=NAMES[k]||(v.size>1?"bound cluster":"free particle");
+    const ci=trackKeys.indexOf(k); const sw=ci>=0?`<span class="sw" style="background:${COLORS[ci]}"></span>`:`<span class="sw" style="background:#26324a"></span>`;
+    return `<tr><td class="f">${sw}${v.txt}</td><td class="n">${nm}</td><td class="c">${v.n}</td></tr>`;}).join("") || `<tr><td class="n">Chamber is empty. Add particles.</td></tr>`;
+  // time series: the multi-particle species that persist (most counted over the window)
+  const snap={}; for(const [k,v] of Object.entries(tally)) if(v.size>1){snap[k]=v.n; txtOf[k]=v.txt;}
+  hist.push(snap); if(hist.length>HIST_MAX)hist.shift();
+  const tot={}; for(const h of hist)for(const k in h)tot[k]=(tot[k]||0)+h[k];
+  trackKeys=Object.entries(tot).sort((a,b)=>b[1]-a[1]).slice(0,6).map(e=>e[0]);
+  drawChart(tally);
+}
+let trackKeys=[]; const txtOf={};
+const ch=document.getElementById("chart"), chx=ch.getContext("2d");
+function drawChart(tally){
+  const w=ch.clientWidth,h=ch.clientHeight; ch.width=w*DPR; ch.height=h*DPR; chx.setTransform(DPR,0,0,DPR,0,0);
+  chx.clearRect(0,0,w,h);
+  const sm=5, series=trackKeys.map(k=>hist.map((_,t)=>{let a=0,c=0;for(let u=Math.max(0,t-sm+1);u<=t;u++){a+=hist[u][k]||0;c++;}return a/c;}));
+  let mx=1; for(const r of series)for(const v of r)if(v>mx)mx=v;
+  chx.strokeStyle="#16213a"; chx.lineWidth=1; chx.font="10px 'IBM Plex Mono', monospace"; chx.fillStyle="#4d5a72";
+  for(let t=0;t<=2;t++){const y=4+(h-18)*t/2; chx.beginPath(); chx.moveTo(24,y); chx.lineTo(w,y); chx.stroke(); chx.fillText((mx*(1-t/2)).toFixed(mx<4?1:0),2,y+3);}
+  series.forEach((r,ci)=>{chx.strokeStyle=COLORS[ci]; chx.lineWidth=1.6; chx.beginPath();
+    r.forEach((v,t)=>{const X=24+(w-26)*t/(HIST_MAX-1), Y=4+(h-18)*(1-v/mx); t?chx.lineTo(X,Y):chx.moveTo(X,Y);}); chx.stroke();});
+  chx.fillText("recent history →",w-96,h-3);
+  document.getElementById("legend").innerHTML = trackKeys.map((k,ci)=>`<span><span class="sw" style="background:${COLORS[ci]}"></span>${txtOf[k]||k}</span>`).join("");
+}
+
+// ---------- presets (particle counts only; positions are always random) ----------
+const PRESETS={
+  h:{T:2000,mix:[["p",24],["e-",24]]},
+  water:{T:1500,mix:[["O",6],["p",12],["e-",60]]},
+  ch:{T:1500,mix:[["C",3],["p",12],["e-",30]]},
+  nh:{T:1500,mix:[["N",3],["p",9],["e-",30]]},
+  he:{T:1500,mix:[["He",14],["e-",28]]},
+  li:{T:1500,mix:[["Li",8],["e-",24]]},
+  ps:{T:800,mix:[["e+",20],["e-",20]]},
+  plasma:{T:30000,mix:[["p",20],["He",6],["e-",32]]},
+  empty:{T:300,mix:[]},
+};
+function loadPreset(name){
+  N=0; simTime=0; hist.length=0; trackKeys=[]; trail=null; const pr=PRESETS[name];
+  setTempK(pr.T);
+  for(const [id,n] of pr.mix) for(let k=0;k<n;k++) addParticle(KI[id], P.T);
+  observe(); updatePanels(); toast(`Started: ${document.querySelector(`#preset option[value=${name}]`).textContent}`);
+}
+
+// ---------- controls ----------
+const $=id=>document.getElementById(id);
+const tempFromSlider=v=> v<=0?0: 10*Math.pow(10, v/100*4); // 10 K .. 100,000 K (log)
+function setTempK(K){ const v=K<=10?0:100*Math.log10(K/10)/4; $("temp").value=v; P.T=K/KELVIN; $("tempO").textContent=Math.round(K).toLocaleString()+" K"; }
+function bind(id,fn){const el=$(id); const f=()=>fn(el); el.addEventListener("input",f); f();}
+bind("speed",el=>{P.speed=+el.value; $("speedO").textContent=el.value+"×";});
+bind("count",el=>{$("countO").textContent=el.value;});
+bind("temp",el=>{const K=tempFromSlider(+el.value); P.T=K/KELVIN; $("tempO").textContent=Math.round(K).toLocaleString()+" K";});
+bind("gamma",el=>{P.gamma=+el.value/100*0.2; $("gammaO").textContent=(P.gamma).toFixed(3);});
+bind("box",el=>{P.L=+el.value; $("boxO").textContent=el.value+" a₀ ("+(P.L*0.0529).toFixed(2)+" nm)";});
+bind("efield",el=>{P.E=+el.value/100*0.02; $("efieldO").textContent=(P.E*514.2).toFixed(1)+" V/nm";});
+bind("bfield",el=>{P.B=+el.value/100*0.05; $("bfieldO").textContent=(P.B*235052).toFixed(0)+" T";});
+bind("xi",el=>{P.xi=+el.value/100; $("xiO").textContent=P.xi.toFixed(2);});
+bind("xip",el=>{P.xip=+el.value/100; $("xipO").textContent=P.xip.toFixed(2);});
+bind("alpha",el=>{P.alpha=+el.value; $("alphaO").textContent=el.value;});
+for(const [id,key] of [["rCoul","coul"],["rUnc","unc"],["rPauli","pauli"]]) bind(id,el=>{P[key]=el.checked;});
+for(const [id,key] of [["vClouds","clouds"],["vBonds","bonds"],["vLabels","labels"],["vTrails","trails"],["vSpin","spin"],["vRotate","rotate"],["vBox","box"]]) bind(id,el=>{V[key]=el.checked;});
+$("kind").innerHTML=KINDS.map((k,i)=>`<option value="${i}">${k.sym} · ${k.name}</option>`).join("");
+$("play").onclick=()=>{P.running=!P.running; $("play").textContent=P.running?"Pause":"Run";};
+$("step").onclick=()=>{for(let i=0;i<20;i++)step(); observe(); updatePanels();};
+$("reset").onclick=()=>loadPreset($("preset").value);
+$("preset").onchange=()=>loadPreset($("preset").value);
+$("add").onclick=()=>{const k=+$("kind").value,n=+$("count").value; for(let i=0;i<n;i++)addParticle(k,P.T); toast(`Added ${n} ${KINDS[k].name}${n>1?"s":""}`);};
+$("addE").onclick=()=>{const k=+$("kind").value,n=+$("count").value,q=KINDS[k].q; if(q<=0){toast("Pick a positive particle first");return;}
+  for(let i=0;i<n*q;i++)addParticle(KI["e-"],P.T); toast(`Added ${n*q} electrons to balance charge`);};
+$("clear").onclick=()=>{const k=+$("kind").value; removeKind(k); toast(`Removed every ${KINDS[k].name}`);};
+$("heat").onclick=()=>{for(let k=0;k<3*N;k++)p[k]*=1.8; toast("Heat pulse: every momentum ×1.8");};
+$("quench").onclick=()=>{setTempK(10); $("gamma").value=80; $("gamma").dispatchEvent(new Event("input")); toast("Quench: 10 K, strong coupling");};
+$("squeeze").onclick=()=>{const v=Math.max(12,P.L*0.8); for(let k=0;k<3*N;k++)x[k]*=v/P.L; $("box").value=v; $("box").dispatchEvent(new Event("input")); toast("Compressed by 20%");};
+function toast(t){const el=$("toast"); el.textContent=t; el.style.opacity=1; clearTimeout(toast.h); toast.h=setTimeout(()=>el.style.opacity=0,1800);}
+
+// camera
+let drag=null;
+cv.addEventListener("pointerdown",e=>{drag=[e.clientX,e.clientY];cv.setPointerCapture(e.pointerId);});
+cv.addEventListener("pointermove",e=>{if(!drag)return; yaw+=(e.clientX-drag[0])*0.008; pitch=Math.max(-1.5,Math.min(1.5,pitch+(e.clientY-drag[1])*0.008)); drag=[e.clientX,e.clientY];});
+cv.addEventListener("pointerup",()=>drag=null);
+cv.addEventListener("wheel",e=>{e.preventDefault(); zoom=Math.max(.4,Math.min(4,zoom*Math.exp(-e.deltaY*0.001)));},{passive:false});
+
+// ---------- persistence (per-viewer convenience) ----------
+const KEY="emergence-chamber-v1";
+function save(){ if(!$("persist").checked) return; try{
+  localStorage.setItem(KEY, JSON.stringify({N, simTime, kind:[...kind.subarray(0,N)], spin:[...spin.subarray(0,N)],
+    x:[...x.subarray(0,3*N)].map(v=>+v.toFixed(5)), p:[...p.subarray(0,3*N)].map(v=>+v.toFixed(5)),
+    ui:Object.fromEntries(["temp","gamma","box","efield","bfield","xi","xip","alpha","speed","preset"].map(id=>[id,$(id).value]))}));}catch(e){} }
+function restore(){ try{ const s=JSON.parse(localStorage.getItem(KEY)||"null"); if(!s||!s.N) return false;
+  for(const [id,v] of Object.entries(s.ui||{})){ $(id).value=v; $(id).dispatchEvent(new Event("input")); }
+  ensure(s.N); N=s.N; simTime=s.simTime||0; kind.set(s.kind); spin.set(s.spin); x.set(s.x); p.set(s.p);
+  toast("Continuing the previous run"); return true; }catch(e){ return false; } }
+
+// ---------- main loop ----------
+ensure(64);
+if(!restore()) loadPreset("h");
+let frame=0, lastSave=performance.now();
+const hud=$("hud");
+function loop(now){
+  if(P.running){ const t0=performance.now(); let n=0;
+    while(n<P.speed*4 && performance.now()-t0<14){ step(); n++; } }
+  if(V.rotate && !drag) yaw+=0.0015;
+  if(frame%6===0){ observe(); }
+  draw();
+  if(frame%15===0){ updatePanels(); hud.innerHTML=`<span>rules: <b>${[P.coul&&"Coulomb",P.unc&&"uncertainty",P.pauli&&"Pauli"].filter(Boolean).join(" · ")||"none"}</b></span><span>bath <b>${Math.round(P.T*KELVIN).toLocaleString()} K</b> · coupling <b>${P.gamma.toFixed(3)}</b></span>`; }
+  if(now-lastSave>5000){ save(); lastSave=now; }
+  frame++; requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
