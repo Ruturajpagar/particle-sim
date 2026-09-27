@@ -143,3 +143,13 @@ def test_settle_metric_is_reported(tmp_path):
     (spec,) = ex.expand(cfg)
     row = ex.run_one((spec, str(tmp_path)))
     assert "settle_free_change" in row and -1.0 <= row["settle_free_change"] <= 1.0
+
+
+def test_init_option_selects_starting_state(tmp_path):
+    cfg = copy.deepcopy(TINY)
+    cfg["system"]["init"] = "pairs"
+    sim, _ = ex.build(cfg, 0, str(tmp_path / "p"))
+    assert ex.measure(sim)["atom_frac"] == 1.0
+    cfg["system"]["init"] = "lattice"
+    with pytest.raises(ValueError, match="unknown init"):
+        ex.build(cfg, 0, str(tmp_path / "x"))
