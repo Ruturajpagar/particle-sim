@@ -72,3 +72,49 @@ class Yukawa(PairInteraction):
         u = -gg * e / r
         dudr = gg * e * (1.0 / r**2 + 1.0 / (self.lam * r))
         return u, -dudr / r
+
+
+class UncertaintyCore:
+    """Momentum-dependent pair rule: no pair can have r · p_rel below ξħ.
+
+        V = ξ²ħ² / (4 α μ r²) · exp(α [1 − (r p / ξħ)⁴])
+
+    r is the pair distance, p the relative momentum, μ the reduced mass.
+    This is the Heisenberg constraint in the classical form of Kirschbaum &
+    Wilets (Phys. Rev. A 21, 834, 1980), applied to *every* pair with ξ = 1
+    fixed in advance (they fitted ξ to atoms; we do not). α only sets how
+    hard the phase-space wall is: it is a numerical stiffness, and results
+    are checked for convergence as α grows.
+
+    Unlike PairInteraction this depends on momenta, so it returns
+    derivatives with respect to both positions and momenta and is used by
+    the phase-space integrator (emergent/phasespace.py).
+    """
+    name = "uncertainty"
+
+    def __init__(self, xi: float = 1.0, hbar: float = 1.0, alpha: float = 5.0):
+        self.xi, self.hbar, self.alpha = xi, hbar, alpha
+
+    def evaluate(self, q: np.ndarray, p: np.ndarray, mass: np.ndarray):
+        """Return (V_total, dV/dq, dV/dp) for all pairs."""
+        n = len(mass)
+        mi, mj = mass[:, None], mass[None, :]
+        total = mi + mj
+        mu = mi * mj / total
+        dq = q[:, None, :] - q[None, :, :]                        # q_i − q_j
+        prel = (mj[..., None] * p[:, None, :] - mi[..., None] * p[None, :, :]) / total[..., None]
+        s = (dq ** 2).sum(-1)                                      # r²
+        P2 = (prel ** 2).sum(-1)                                   # p_rel²
+        off = ~np.eye(n, dtype=bool)
+        s = np.where(off, s, 1.0)
+
+        k4 = (self.xi * self.hbar) ** 4
+        C = (self.xi * self.hbar) ** 2 / (4 * self.alpha * mu)
+        E = np.exp(self.alpha * (1.0 - s ** 2 * P2 ** 2 / k4))
+        V = np.where(off, C * E / s, 0.0)
+        dV_ds = np.where(off, -C * E / s ** 2 - 2 * self.alpha * C * E * P2 ** 2 / k4, 0.0)
+        dV_dP2 = np.where(off, -2 * self.alpha * C * E * s * P2 / k4, 0.0)
+
+        grad_q = (2 * dV_ds[..., None] * dq).sum(axis=1)
+        grad_p = (2 * dV_dP2[..., None] * prel * (mj / total)[..., None]).sum(axis=1)
+        return 0.5 * V.sum(), grad_q, grad_p
