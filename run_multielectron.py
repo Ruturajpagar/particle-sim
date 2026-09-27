@@ -40,7 +40,7 @@ from emergent.phasespace import PhaseSpaceSystem
 OUT = "results/multielectron"
 HARTREE_EV, BOHR_A = 27.211386, 0.529177
 ALPHAS = (5.0, 10.0, 20.0, 40.0)
-XI_P = [1.0, 1.5, 2.0, 2.5, 2.767, 3.0, 3.5, 4.0]   # 2.767: Kirschbaum-Wilets fitted value
+XI_P = [1.0, 1.5, 2.0, 2.5, 2.767, 3.0, 3.5, 4.0, 5.0, 6.0, 8.0]   # 2.767: Kirschbaum-Wilets fitted
 
 E = Species("e", 1.0, -1.0)
 P = Species("p", 1836.15267, +1.0)                         # proton, spin 1/2
@@ -69,6 +69,12 @@ MEASURED = {
     "H2 De": 4.7474, "H2 D0": 4.4781,      # bond energy without / with nuclear zero-point
     "H2 Re (a0)": 1.4011,
 }
+
+
+# Bohr's 1913 model for comparison: two electrons on opposite sides of one
+# circular orbit around charge Z give E = −(Z − 1/4)² Hartree.
+BOHR = {"He": (2 - 0.25) ** 2 * HARTREE_EV, "Li+": (3 - 0.25) ** 2 * HARTREE_EV,
+        "H electron affinity": ((1 - 0.25) ** 2 - 0.5) * HARTREE_EV, "H": 0.5 * HARTREE_EV}
 
 
 def build(name: str, xi_p: float) -> PhaseSpaceSystem:
@@ -153,15 +159,17 @@ def main() -> None:
     eLip, eH2 = get("Li+")["E_inf"], get("H2 singlet")["E_inf"]
     h2 = get("H2 singlet")
     print("=== Part 1: no free constants ===")
-    print(f"  {'quantity':<28} {'predicted':>10} {'measured':>10} {'error':>8}")
-    for label, pred, meas in [
-        ("H total binding (eV)", ev(eH), MEASURED["H"]),
-        ("He total binding (eV)", ev(eHe), MEASURED["He"]),
-        ("Li+ total binding (eV)", ev(eLip), MEASURED["Li+"]),
-        ("H electron affinity (eV)", ev(eHm) - ev(eH), MEASURED["H electron affinity"]),
-        ("H2 bond energy (eV)", ev(eH2) - 2 * ev(eH), MEASURED["H2 De"]),
-    ]:
-        print(f"  {label:<28} {pred:>10.3f} {meas:>10.3f} {100 * (pred - meas) / meas:>+7.1f}%")
+    print(f"  {'quantity':<28} {'predicted':>10} {'measured':>10} {'error':>8} {'Bohr 1913':>10}")
+    part1 = [
+        ("H total binding (eV)", ev(eH), MEASURED["H"], BOHR["H"]),
+        ("He total binding (eV)", ev(eHe), MEASURED["He"], BOHR["He"]),
+        ("Li+ total binding (eV)", ev(eLip), MEASURED["Li+"], BOHR["Li+"]),
+        ("H electron affinity (eV)", ev(eHm) - ev(eH), MEASURED["H electron affinity"],
+         BOHR["H electron affinity"]),
+        ("H2 bond energy (eV)", ev(eH2) - 2 * ev(eH), MEASURED["H2 De"], float("nan")),
+    ]
+    for label, pred, meas, bohr in part1:
+        print(f"  {label:<28} {pred:>10.3f} {meas:>10.3f} {100 * (pred - meas) / meas:>+7.1f}% {bohr:>10.3f}")
     print(f"  H2 bond length: {json.loads(h2['nucleus_distances'])[0]:.3f} a0 "
           f"(measured {MEASURED['H2 Re (a0)']})")
 
@@ -174,7 +182,66 @@ def main() -> None:
               f"{li['electron_to_nearest_nucleus']}")
     print(f"  measured:  Li ionization {MEASURED['Li ionization']:.3f} eV; H2 triplet unbound (≤ 0); "
           f"H3 unbound (≥ 0)")
+    make_figure(rows, part1, eH, eLip, eH2, f"{OUT}/multielectron.png")
     print(f"\n{len(jobs)} ground-state searches in {time.perf_counter() - t0:.0f} s -> {OUT}/")
+
+
+def make_figure(rows, part1, eH, eLip, eH2, path):
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    ev = lambda h: -h * HARTREE_EV
+    get = lambda n, x: next(r for r in rows if r["system"] == n and r["xi_P"] == x)
+    fig, ax = plt.subplots(2, 2, figsize=(14, 9.5))
+
+    a = ax[0, 0]
+    labels = ["H", "He", "Li⁺", "H⁻ electron\naffinity", "H₂ bond"]
+    err = [100 * (p - m) / m for _, p, m, _ in part1]
+    bohr = [100 * (b - m) / m for _, _, m, b in part1]
+    x = np.arange(len(labels))
+    a.bar(x - 0.2, err, 0.4, color=["C2", "C1", "C1", "C3", "C3"], label="this simulation")
+    a.bar(x + 0.2, bohr, 0.4, color="0.75", label="Bohr 1913 model")
+    a.axhline(0, color="k", lw=0.8)
+    a.set_xticks(x, labels)
+    a.set_yscale("symlog", linthresh=10)
+    a.set_ylabel("error vs measured (%)")
+    a.set_title("Part 1, no free constants: atoms land on Bohr's model; H₂ fails")
+    a.legend(fontsize=9)
+    for xi, e in zip(x, err):
+        a.text(xi - 0.2, e * (1.15 if e > 0 else 1), f"{e:+.1f}%", ha="center", va="bottom", fontsize=8)
+
+    xs = XI_P
+    a = ax[0, 1]
+    a.plot(xs, [ev(get("Li", v)["E_inf"]) - ev(eLip) for v in xs], "o-", color="C0")
+    a.axhline(MEASURED["Li ionization"], color="k", ls="--", lw=1, label="measured 5.39 eV")
+    a.axvline(2.767, color="0.6", ls=":", lw=1, label="Kirschbaum–Wilets fitted ξ_P")
+    a.set(xlabel="Pauli strength ξ_P", ylabel="Li ionization energy (eV)",
+          title="Li: outer electron gets easier to remove as ξ_P grows")
+    a.legend(fontsize=9)
+
+    a = ax[1, 0]
+    a.plot(xs, [ev(get("H2 triplet", v)["E_inf"]) - 2 * ev(eH) for v in xs], "o-", color="C3",
+           label="H₂ with parallel spins: bond energy")
+    a.plot(xs, [ev(get("H3", v)["E_inf"]) - ev(eH2) - ev(eH) for v in xs], "s-", color="C4",
+           label="H₃: extra binding beyond H₂ + H")
+    a.axhline(0, color="k", ls="--", lw=1, label="reality: both ≤ 0 (unbound)")
+    a.set(xlabel="Pauli strength ξ_P", ylabel="eV",
+          title="Molecules that should not bind stay bound at every ξ_P")
+    a.legend(fontsize=9)
+
+    a = ax[1, 1]
+    radii = np.array([json.loads(get("Li", v)["electron_to_nearest_nucleus"]) for v in xs])
+    for k, lab in enumerate(["electron 1", "electron 2", "electron 3"]):
+        a.plot(xs, radii[:, k], "o-", label=lab)
+    a.set(xlabel="Pauli strength ξ_P", ylabel="distance from Li nucleus (a0)",
+          title="Li: a second shell emerges once Pauli acts")
+    a.legend(fontsize=9)
+    fig.suptitle("Multi-electron systems from Coulomb + uncertainty (+ Pauli) rules, "
+                 "atomic units, α → ∞ extrapolation", fontsize=12)
+    fig.tight_layout()
+    fig.savefig(path, dpi=100)
+    plt.close(fig)
 
 
 if __name__ == "__main__":
