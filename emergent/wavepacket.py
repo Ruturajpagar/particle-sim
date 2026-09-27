@@ -84,6 +84,11 @@ class WavePacketSystem:
         return self.energy_of(R, s)
 
     def energy_of(self, R: np.ndarray, s: np.ndarray) -> float:
+        # overflow at extreme widths is expected and mapped to a high energy below
+        with np.errstate(over="ignore", invalid="ignore", divide="ignore", under="ignore"):
+            return self._energy_of(R, s)
+
+    def _energy_of(self, R: np.ndarray, s: np.ndarray) -> float:
         a = 1.0 / s ** 2
         ai, aj = a[:, None], a[None, :]
         p = ai + aj                                   # product exponent
@@ -93,6 +98,8 @@ class WavePacketSystem:
         T = S * mu * (3.0 - 2.0 * mu * d2)            # ⟨φ_i|−½∇²|φ_j⟩ for unit mass
         P = (ai[..., None] * R[:, None, :] + aj[..., None] * R[None, :, :]) / p[..., None]
 
+        if not (np.all(np.isfinite(S)) and np.all(np.isfinite(T))):
+            return 1e6
         # Density matrices: D = S⁻¹ within each antisymmetrized group.
         D = np.zeros((self.n, self.n))
         kinetic = 0.0
@@ -101,9 +108,12 @@ class WavePacketSystem:
             if len(g) == 1:
                 Dg = np.array([[1.0]])
             else:
-                if np.linalg.cond(Sg) > 1e12:        # packets coincide: forbidden
+                try:
+                    if np.linalg.cond(Sg) > 1e12:    # packets coincide: forbidden
+                        return 1e6
+                    Dg = np.linalg.inv(Sg)
+                except np.linalg.LinAlgError:
                     return 1e6
-                Dg = np.linalg.inv(Sg)
             D[np.ix_(g, g)] = Dg
             kinetic += float((Dg * T[np.ix_(g, g)]).sum()) / self.mass[g[0]]
 
@@ -151,7 +161,9 @@ def random_start(system: WavePacketSystem, rng: np.random.Generator, radius: flo
 def minimize_wavepacket(system: WavePacketSystem, x0: np.ndarray, maxiter: int = 3000):
     from scipy.optimize import minimize
 
-    res = minimize(lambda x: (system.energy(x), system.gradient(x)), x0, jac=True,
+    # widths are kept within 1e-5 .. 1e3 a0; positions are free
+    bounds = [(None, None)] * (3 * system.n) + [(np.log(1e-5), np.log(1e3))] * system.n
+    res = minimize(lambda x: (system.energy(x), system.gradient(x)), x0, jac=True, bounds=bounds,
                    method="L-BFGS-B", options={"gtol": 1e-7, "ftol": 1e-15, "maxiter": maxiter})
     return float(res.fun), res.x, bool(res.success)
 

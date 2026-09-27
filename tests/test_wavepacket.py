@@ -74,3 +74,10 @@ def test_lone_packets_do_not_repel_themselves():
     # a single free electron at rest: only its confinement energy remains
     sys_ = WavePacketSystem([E], [0], [1])
     assert sys_.energy_of(np.zeros((1, 3)), np.array([2.0])) == pytest.approx(3 / (2 * 4.0))
+
+
+def test_extreme_widths_give_a_high_energy_not_a_crash():
+    sys_ = WavePacketSystem([P, E], [0, 1, 1], [+1, +1, +1])
+    R = np.zeros((3, 3))
+    for s in ([1e-300, 1.0, 1.0], [1.0, 1e300, 1e300], [np.nan, 1.0, 2.0]):
+        assert sys_.energy_of(R, np.array(s)) >= 1e6
