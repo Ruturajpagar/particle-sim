@@ -88,7 +88,7 @@ MEASURED = {  # eV (NIST)
     "Li binding": 5.391715 + 75.64009 + 122.45436,
     "Be binding": 9.32270 + 18.21115 + 153.8962 + 217.7186,
 }
-PHASE4_LI = -8.5713                                       # results/diffusion: no antisymmetry
+PHASE4_LI = -8.6511                                       # results/diffusion (corrected rerun): no antisymmetry
 
 
 _nodes: dict = {}
