@@ -73,10 +73,27 @@ The imaginary-time Schrödinger equation run as random walkers: every
 particle (nuclei included) random-walks with diffusion constant ħ/2m, and
 whole configurations multiply or die by their Coulomb energy. No wave shape
 is assumed. Result (`results/diffusion/FINDINGS.md`): H, He, H⁻, H₂⁺, H₂ and
-positronium all come out within 0.1–0.5% of exact. H⁻ now binds (0.70 ±
-0.10 eV, measured 0.754) and H₂'s bond is 4.37 ± 0.13 eV (4.478). The
-missing rule is now Pauli: without antisymmetry in the walk, H₂ with
+positronium all come out within 0.1–0.5% of exact. H⁻ now binds (0.80 ±
+0.09 eV, measured 0.754) and H₂'s bond is 4.56 ± 0.11 eV (4.478). The
+missing rule was Pauli: without antisymmetry in the walk, H₂ with
 parallel spins binds and lithium collapses into one shell.
+
+## Phase 5: antisymmetry in the walk
+
+```
+python run_antisymmetry.py      # ~80 min on 4 cores
+python plot_antisymmetry.py
+```
+
+Exchanging identical same-spin fermions flips the wave's sign. Walkers keep
+the sign of their region and never cross the node. The node comes from the
+wave the Phase 3 rules find from random starts; walkers are guided by that
+same wave plus exact pair-cusp factors, which changes only the noise.
+Result (`results/antisymmetry/FINDINGS.md`): lithium's total binding is
+203.28 ± 0.17 eV (measured 203.49), helium's parallel-spin excited state
+ionizes at 4.76 ± 0.14 eV (4.768), beryllium is 0.25% above exact (the
+node's limit). Along the way a population-control bias was found and
+corrected in every diffusion estimate.
 
 ## Principles audit
 
