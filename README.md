@@ -14,6 +14,23 @@ python run_phase1.py --no-core        # remove the short-range core -> classical
 Each run writes to `runs/<name>/`: `log.csv` (time series), `anomalies.jsonl`,
 `final_state.npz`, and a `report.png` dashboard.
 
+## Phase 2: quantum effects as fundamental rules
+
+Phase 1's bound pairs got their size and energy from a hand-chosen core
+constant. Phase 2 replaces that with one universal rule, the uncertainty
+wall `UncertaintyCore` (r · p ≥ ħ for every pair, ξ = 1 fixed in advance),
+integrated in phase space by `emergent/phasespace.py`. See `PRINCIPLES.md`
+for what counts as a fundamental rule.
+
+```
+python run_hydrogen.py     # ~10 min on 4 cores
+```
+
+Result (`results/hydrogen_emergence/FINDINGS.md`): Coulomb alone collapses;
+Coulomb + the uncertainty wall settles every random start into one ground
+state, and the same rule predicts the binding energies of hydrogen, He⁺ and
+positronium within 0.03% of measurement, with nothing fitted.
+
 ## Experiments
 
 An experiment is a TOML file in `experiments/`: species, rules, protocol,

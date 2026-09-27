@@ -27,5 +27,5 @@ structure emerge and compare it with reality.**
 | `Coulomb` (k q_i q_j / r) | Fundamental. |
 | `CoreRepulsion` (c / r^n) | **Placeholder.** c is chosen by hand, and it sets the size and binding energy of every bound pair. It stands in for quantum effects and is being replaced by `UncertaintyCore`. |
 | `Yukawa` | Fundamental in form (massive mediator); unused so far. |
-| `UncertaintyCore` (r · p ≥ ξħ for every pair) | Fundamental in intent: one universal rule, ξ = 1 and ħ = 1 in atomic units, fixed before any run. Its wall stiffness α is numerical and is checked for convergence. |
+| `UncertaintyCore` (r · p ≥ ξħ for every pair) | Fundamental in intent: one universal rule, ξ = 1 and ħ = 1 in atomic units, fixed before any run. Its wall stiffness α is numerical and is checked for convergence. With it, hydrogen, He⁺ and positronium ground-state energies emerge within 0.03% of measurement (`results/hydrogen_emergence/`). ξ = 1 is a choice (the de Broglie condition), supported by that universality, not derived. |
 | Heat bath / friction | Stand-in for energy carried away by radiation. It removes energy only; it must not select what forms. |
