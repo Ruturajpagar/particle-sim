@@ -106,13 +106,16 @@ class DiffusionResult:
     X: np.ndarray = field(repr=False)        # final walkers
     pair_hist: np.ndarray | None = field(default=None, repr=False)  # (pairs, bins) counts
     node_kill_rate: float = 0.0  # walkers removed at the node per walker per unit time
+    energy_pc: float = float("nan")         # population-control-corrected estimate (use this)
+    error_pc: float = float("nan")
 
 
 def run_diffusion(system: DiffusionSystem, tau: float, t_equil: float, t_measure: float,
                   n_target: int = 2000, seed: int = 0, block_time: float = 2.0,
                   control_time: float = 1.0, max_copies: int = 4,
                   X0: np.ndarray | None = None, hist_edges: np.ndarray | None = None,
-                  hist_time: float = 1.0, node=None, remove_com: bool = False) -> DiffusionResult:
+                  hist_time: float = 1.0, node=None, remove_com: bool = False,
+                  pc_window: float = 3.0, trial_time: float = 5.0) -> DiffusionResult:
     """Run the two rules for t_equil + t_measure (atomic time units).
 
     `control_time` is how quickly E_ref pulls the population back to n_target;
@@ -130,7 +133,14 @@ def run_diffusion(system: DiffusionSystem, tau: float, t_equil: float, t_measure
     weighted by 1 − exp(−2 d_old d_new / τ), the chance it did not cross and
     return within the step (mass-weighted coordinates). With a
     node, V averaged over the walkers is no longer the energy (the node
-    boundary adds a term), so use the growth estimator `growth`.
+    boundary adds a term); the loss rate at the node is added to V instead.
+
+    Population control (E_ref) multiplies every walker by the same factor
+    each step. With a finite population that feedback biases the energy by
+    O(1/n_target), strongly here because unguided Coulomb weights fluctuate a
+    lot. `energy_pc` undoes it: each step's estimate is weighted by the product
+    of the inverse factors applied over the preceding `pc_window` time
+    (Umrigar, Nightingale & Runge 1993). It is the estimate to report.
     """
     rng = np.random.default_rng(seed)
     X = random_walkers(system, n_target, rng) if X0 is None else X0.copy()
@@ -152,6 +162,10 @@ def run_diffusion(system: DiffusionSystem, tau: float, t_equil: float, t_measure
     walker_steps = 0
     n_equil = int(round(t_equil / tau))
     n_meas = int(round(t_measure / tau))
+    n_total = n_equil + n_meas
+    applied = np.empty(n_total)          # E_ref used in each step's weights
+    local = np.empty(n_total)            # V average + node loss rate after each step
+    sizes = np.empty(n_total)
     series = np.empty(n_meas)
     refs = np.empty(n_meas)
     counts = np.empty(n_meas)
@@ -163,6 +177,7 @@ def run_diffusion(system: DiffusionSystem, tau: float, t_equil: float, t_measure
         X = centre(X + sigma * rng.normal(size=X.shape))
         V_new = system.potential(X)
         w = np.exp(-tau * (0.5 * (V + V_new) - e_ref))
+        applied[step] = e_ref
         kill_frac = 0.0
         if use_node:
             sgn, d_new = node.evaluate(X)
@@ -188,9 +203,19 @@ def run_diffusion(system: DiffusionSystem, tau: float, t_equil: float, t_measure
         if len(V) == 0:
             raise RuntimeError("population died out; lower tau or raise n_target")
         v_mean = float(V.mean())
-        # walkers lost at the node are replaced by raising E_ref by that loss rate
-        e_ref = v_mean - np.log((1 - kill_frac) if kill_frac < 1 else 1e-300) / tau \
-            - np.log(len(V) / n_target) / control_time
+        local[step] = v_mean - np.log((1 - kill_frac) if kill_frac < 1 else 1e-300) / tau
+        sizes[step] = len(V)
+        # E_ref = slowly updated energy estimate (V average + node loss rate,
+        # averaged over `trial_time`) minus a pull on the population size
+        # (during equilibration it follows the instantaneous value, since the
+        # start is far from stationary)
+        if step < n_equil:
+            e_trial = local[step]
+        else:
+            e_trial += (local[step] - e_trial) * min(1.0, tau / trial_time)
+        e_ref = e_trial - np.log(len(V) / n_target) / control_time
+        if len(V) > 2 * n_target:        # hard pull back if a transient overshoots
+            e_ref -= np.log(len(V) / (2 * n_target)) / tau
         k = step - n_equil
         if k >= 0:
             series[k] = v_mean
@@ -209,11 +234,20 @@ def run_diffusion(system: DiffusionSystem, tau: float, t_equil: float, t_measure
         xb = (x[: nb * per] * wts[: nb * per]).reshape(nb, per).sum(1) / wts[: nb * per].reshape(nb, per).sum(1)
         return float(np.average(x, weights=wts)), float(xb.std(ddof=1) / np.sqrt(nb))
 
+    # population-control correction over a trailing window of L steps
+    L = max(1, int(round(pc_window / tau)))
+    logf = -tau * (applied - applied[n_equil:].mean())
+    csum = np.concatenate([[0.0], np.cumsum(logf)])
+    idx = np.arange(n_equil, n_total)
+    logW = csum[idx + 1] - csum[np.maximum(idx + 1 - L, 0)]
+    Wt = np.exp(logW - logW.max()) * sizes[n_equil:]
+    e_pc, err_pc = block_mean(local[n_equil:], Wt)
+
     e, err = block_mean(series, counts)
     g, gerr = block_mean(refs, np.ones_like(refs))
     return DiffusionResult(tau, e, err, g, gerr, float(counts.mean()),
                            capped / max(branched, 1), series, X, hist,
-                           killed_total / max(walker_steps, 1) / tau)
+                           killed_total / max(walker_steps, 1) / tau, e_pc, err_pc)
 
 
 def extrapolate(taus: np.ndarray, energies: np.ndarray, errors: np.ndarray) -> tuple[float, float, float]:

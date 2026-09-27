@@ -38,6 +38,7 @@ def test_hydrogen_ground_state_emerges_from_random_starts():
     r = run_diffusion(s, tau=0.01, t_equil=10, t_measure=40, n_target=1000, seed=3)
     assert r.energy == pytest.approx(-0.5, abs=0.02)
     assert r.growth == pytest.approx(-0.5, abs=0.02)
+    assert r.energy_pc == pytest.approx(-0.5, abs=0.02)
     assert 900 < r.walkers_mean < 1100
 
 

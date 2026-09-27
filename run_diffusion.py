@@ -90,8 +90,8 @@ def chunk(job):
     r = run_diffusion(sys_, tau, t_eq, t_meas, n_target=N_TARGET, seed=seed, hist_edges=HIST_EDGES)
     half = len(r.series) // 2
     drift = float(r.series[half:].mean() - r.series[:half].mean())
-    return {"system": name, "tau_factor": factor, "tau": tau, "seed": seed, "E": r.energy,
-            "err": r.error, "E_growth": r.growth, "err_growth": r.growth_error,
+    return {"system": name, "tau_factor": factor, "tau": tau, "seed": seed, "E": r.energy_pc,
+            "err": r.error_pc, "E_uncorrected": r.energy, "E_growth": r.growth,
             "walkers": round(r.walkers_mean, 1), "capped_fraction": r.capped_fraction,
             "half_drift": drift, "pauli_free": sys_.pauli_free,
             "wall_s": round(time.perf_counter() - t0, 1)}, r.pair_hist

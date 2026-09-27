@@ -109,7 +109,7 @@ def chunk(job):
                       node=node, remove_com=True)
     half = len(r.series) // 2
     return {"system": name, "tau_factor": factor, "tau": tau, "seed": seed,
-            "E": r.growth, "err": r.growth_error, "V_average": r.energy,
+            "E": r.energy_pc, "err": r.error_pc, "E_uncorrected": r.growth,
             "walkers": round(r.walkers_mean, 1), "node_kill_rate": r.node_kill_rate,
             "capped_fraction": r.capped_fraction, "has_node": node.active,
             "wall_s": round(time.perf_counter() - t0, 1)}
