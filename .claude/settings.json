@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/audit_principles.py\" --hook 2>/dev/null || true",
+            "timeout": 30,
+            "statusMessage": "Auditing fundamental-rules principle"
+          }
+        ]
+      }
+    ]
+  }
+}

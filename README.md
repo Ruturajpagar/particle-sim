@@ -62,6 +62,30 @@ bind, and lithium grows a second shell with ionization energy 5.31 eV
 ~20% too weak (the one-Gaussian shape), and H⁻ does not bind (no
 correlation).
 
+## Phase 4: the whole system's wave, by diffusion
+
+```
+python run_diffusion.py         # ~20 min on 4 cores
+python plot_diffusion.py
+```
+
+The imaginary-time Schrödinger equation run as random walkers: every
+particle (nuclei included) random-walks with diffusion constant ħ/2m, and
+whole configurations multiply or die by their Coulomb energy. No wave shape
+is assumed. Result (`results/diffusion/FINDINGS.md`): H, He, H⁻, H₂⁺, H₂ and
+positronium all come out within 0.1–0.5% of exact. H⁻ now binds (0.70 ±
+0.10 eV, measured 0.754) and H₂'s bond is 4.37 ± 0.13 eV (4.478). The
+missing rule is now Pauli: without antisymmetry in the walk, H₂ with
+parallel spins binds and lithium collapses into one shell.
+
+## Principles audit
+
+`python tools/audit_principles.py` checks the code against `PRINCIPLES.md`:
+rule modules name no atoms, bonds, shells or elements and hold no measured
+values; every rule class has a status row; every run starts from random
+positions. It runs before every prompt as a Claude Code hook
+(`.claude/settings.json`) and in the test suite (`tests/test_audit.py`).
+
 ## Experiments
 
 An experiment is a TOML file in `experiments/`: species, rules, protocol,
